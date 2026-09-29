@@ -121,7 +121,10 @@ Ta sama warstwa rozpoznania przejezdności tras służy **WOT i wojsku** do plan
 
 Wymóg regulaminu (IX):
 
-- **Narzędzia AI:** Claude (Anthropic) pomagał w analizie zadania, koncepcji, kodzie (planer, symulacja, demo, panel, notatnik treningu) i dokumentacji. Zespół sprawdzał i uruchamiał kod oraz podejmował decyzje projektowe.
+- **Narzędzia AI:**
+  - Claude (Anthropic) pomagał w analizie zadania, koncepcji, kodzie (planer, symulacja, demo, panel, notatnik treningu) i dokumentacji.
+  - Codex (OpenAI) pomagał w kodzie i dokumentacji, m.in. przy imporcie zdjęć LADI v2 (`ai/import_ladi.py`).
+  - Zespół sprawdzał i uruchamiał kod oraz podejmował decyzje projektowe.
 - **Modele:** Ultralytics YOLO11n-seg (AGPL-3.0), douczony na FloodNet; OpenAI CLIP ViT-B/32 używany tylko w pokazie z kamerki.
 - **Biblioteki:**
   - networkx (BSD-3-Clause), matplotlib (licencja PSF-podobna, matplotlib License),
