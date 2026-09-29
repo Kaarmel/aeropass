@@ -68,10 +68,10 @@
 </head>
 <body>
 <header>
-  <h1>AeroPass · stanowisko kierowania PSP · Dolina Solinki i Wetlinki</h1>
+  <h1>AeroPass · widok sztabu · Dolina Solinki i Wetlinki</h1>
   <span class="znacznik">DEMO · dane symulowane są oznaczone</span>
+  <a href="http://localhost:8767/" target="_blank" rel="noopener">Operator: zdjęcie i GPS ↗</a>
   <a href="film.html" target="_blank" rel="noopener">Analiza filmu z drona ↗</a>
-  <a href="http://localhost:8767/" target="_blank" rel="noopener">Model na kamerce ↗</a>
   <span class="zegar" id="zegar">--:--</span>
 </header>
 <div id="pasek">
@@ -106,16 +106,18 @@
   <div class="kpi"><b id="k-odc">0</b><span>⛔ wsi odciętych (wóz ciężki)</span></div>
   <div class="kpi"><b id="k-nie">0</b><span>❓ wsi o nieustalonym dojeździe</span></div>
   <div class="kpi"><b id="k-dost">0</b><span>✅ wsi z dojazdem</span></div>
-  <div class="kpi"><b id="k-km">0</b><span>km dróg sprawdzonych z drona</span></div>
-  <div class="kpi"><b id="k-min">0</b><span>minut lotu</span></div>
+  <div class="kpi"><b id="k-km">0</b><span>km sprawdzonych w symulacji</span></div>
+  <div class="kpi"><b id="k-min">0</b><span>minut symulowanego lotu</span></div>
   <div class="kpi"><b id="k-proc">— / —</b><span>min do ustalenia 50% / 90% wsi nieznanych na starcie</span></div>
 </div>
 <main>
   <section id="lista">
     <div id="szczegoly"></div>
+    <h2>Obserwacje operatora · zdjęcie i GPS</h2>
+    <div id="operatorzy"></div>
     <h2>Meldunki według pilności</h2>
     <div id="meldunki"></div>
-    <h2>Nie wiadomo (dron jeszcze sprawdza)</h2>
+    <h2>Nieznany dojazd w scenariuszu</h2>
     <div id="nieznane"></div>
     <h2>Dziennik zdarzeń</h2>
     <div id="log"></div>
@@ -132,8 +134,9 @@ const WYNIK = {zatwierdzona: "zatwierdzona", odrzucona: "odrzucona", zmieniona: 
                zadysponowano: "zadysponowano", w_drodze: "w drodze", dotarlo: "dotarło", niewykonane: "niewykonane"};
 const KOLORY_DRONOW = ["#f97316", "#db2777", "#0891b2", "#65a30d"];
 const ODSWIEZANIE_MS = 500;
-let stan = {misja: null, wsie: [], meldunki: [], zmiany: {}, decyzje: [], loty: [], zdarzenia: []};
+let stan = {misja: null, wsie: [], meldunki: [], zmiany: {}, decyzje: [], loty: [], zdarzenia: [], obserwacjeOperatora: []};
 let wybrany = null, odcinki = {}, warstwyOdc = {}, znacznikiWsi = {}, drony = [], stacje = [], rzeki = [];
+const znacznikiOperatora = {};
 let reczne = {}, powody = {}, prawda = {}, przebieg = null, ster = {}, podpisy = {};  // reczne: klik przed startem (system tego nie wie)
 
 // ---------- mapa: podkłady GUGiK / OpenTopoMap albo bez podkładu (offline); drogi i cieki to wektory z OSM ----------
@@ -151,9 +154,9 @@ const podklady = {
 podklady["Rzeźba terenu: cieniowanie NMT (GUGiK)"].addTo(mapa);
 const isok = L.tileLayer.wms("https://wody.isok.gov.pl/wss/INSPIRE/INSPIRE_NZ_HY_MZPMRP_WMS", {layers: "NZ.Fluvial", format: "image/png", transparent: true, minZoom: 13, zIndex: 5,
   attribution: "Obszary zagrożenia powodziowego: © Wody Polskie / KZGW (ISOK)"});
-const warstwaCiekow = L.layerGroup().addTo(mapa), warstwaWody = L.layerGroup().addTo(mapa), nakladka = L.layerGroup().addTo(mapa), slady = L.layerGroup().addTo(mapa);
+const warstwaCiekow = L.layerGroup().addTo(mapa), warstwaWody = L.layerGroup().addTo(mapa), nakladka = L.layerGroup().addTo(mapa), slady = L.layerGroup().addTo(mapa), warstwaOperatora = L.layerGroup().addTo(mapa);
 L.control.layers(podklady, {"Strefy zagrożenia powodziowego ISOK (od przybliżenia 13)": isok, "Rzeki i potoki (OSM)": warstwaCiekow,
-  "Woda i przeszkody w scenariuszu": warstwaWody, "Ślady lotów dronów": slady}, {collapsed: false, position: "topright"}).addTo(mapa);
+  "Woda i przeszkody w scenariuszu": warstwaWody, "Ślady lotów dronów": slady, "Potwierdzone obserwacje operatora": warstwaOperatora}, {collapsed: false, position: "topright"}).addTo(mapa);
 isok.addTo(mapa);
 mapa.attributionControl.addAttribution("Drogi i cieki: © OpenStreetMap contributors (ODbL), IMGW-PIB");
 const legenda = L.control({position: "bottomleft"});
@@ -215,6 +218,32 @@ function wiek(iso) {
   return m <= 0 ? "przed chwilą" : `${m} min temu`;
 }
 
+const htm = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+const typOperatora = {zalanie: "Widoczne zalanie", brak_widocznego_zalania: "Brak widocznego zalania",
+  drzewa: "Powalone drzewa", uszkodzony_most: "Uszkodzony most", inne: "Inna przeszkoda", nie_ustalono: "Nie ustalono"};
+function pokazObserwacje(id) {
+  const o = stan.obserwacjeOperatora.find(x => x.id === id);
+  if (o && znacznikiOperatora[id]) { mapa.flyTo(o.gps, 14, {duration:.6}); znacznikiOperatora[id].openPopup(); }
+}
+function rysujOperatora() {
+  if (!zmienione("obserwacje_operatora", stan.obserwacjeOperatora.map(o => o.id))) return;
+  for (const o of stan.obserwacjeOperatora) {
+    if (znacznikiOperatora[o.id]) continue;
+    const nazwa = typOperatora[o.typ] || o.typ;
+    const model = o.wyniki && o.wyniki.length ? `${o.wyniki[0].typ}: ${Math.round(o.wyniki[0].score * 100)}% względnego dopasowania` : "brak";
+    const opis = `<b>${htm(nazwa)}${o.liczba ? `: ${o.liczba}` : ""}</b><br>${htm(o.operator)} · ${htm(o.czas_potwierdzenia)}<br>` +
+      `Model sugerował: ${htm(model)}<br>GPS: ${o.gps.map(x => x.toFixed(5)).join(", ")} · ${o.material === "demo" ? "materiał demo" : "ujęcie z lotu (deklaracja operatora)"}<br>` +
+      `Źródło: ${htm(o.zrodlo)}${o.uwagi ? `<br>Uwagi: ${htm(o.uwagi)}` : ""}<br><a href="../${htm(o.obraz)}" target="_blank" rel="noopener">Otwórz zdjęcie</a>`;
+    znacznikiOperatora[o.id] = L.circleMarker(o.gps, {radius: 9, color: "#111827", weight: 2, fillColor: "#f59e0b", fillOpacity: 1})
+      .addTo(warstwaOperatora).bindPopup(opis);
+  }
+  $("operatorzy").innerHTML = stan.obserwacjeOperatora.slice().reverse().map(o =>
+    `<div class="m informacyjne" onclick="pokazObserwacje('${o.id}')"><div class="gora"><span class="nazwa">${htm(typOperatora[o.typ] || o.typ)}${o.liczba ? ` · ${o.liczba}` : ""}</span></div>` +
+    `<div class="stat">${htm(o.operator)} · ${htm(o.czas_potwierdzenia)} · ${o.material === "demo" ? "DEMO" : "lot operatora"}</div>` +
+    `<div class="stat">GPS ${o.gps.map(x => x.toFixed(5)).join(", ")} · zdjęcie i wynik modelu po kliknięciu</div></div>`).join("") ||
+    '<div class="stat">Brak zatwierdzonych obserwacji. Operator może wgrać zdjęcie przez link w nagłówku.</div>';
+}
+
 // rysujemy tylko to, co się zmieniło: bez tego lista skacze, a pole „Zmień” traci wpisany tekst
 function zmienione(klucz, wartosc) {
   const s = JSON.stringify(wartosc);
@@ -223,16 +252,16 @@ function zmienione(klucz, wartosc) {
 }
 
 async function odswiez() {
-  const [misja, wsie, meldunki, zmiany, decyzje, loty, zdarzenia] = await Promise.all(
-    ["misja", "wsie", "meldunki", "zmiany", "decyzje", "loty", "zdarzenia"].map(n => pobierz(`stan/${n}.json`)));
+  const [misja, wsie, meldunki, zmiany, decyzje, loty, zdarzenia, obserwacjeOperatora] = await Promise.all(
+    ["misja", "wsie", "meldunki", "zmiany", "decyzje", "loty", "zdarzenia", "obserwacje_operatora"].map(n => pobierz(`stan/${n}.json`)));
   ster = await fetch("/api/sterowanie").then(r => r.json()).catch(() => ({}));
   Object.assign(stan, {misja, wsie: wsie || [], meldunki: meldunki || [], zmiany: zmiany || {},
-                       decyzje: decyzje || [], loty: loty || [], zdarzenia: zdarzenia || []});
+                       decyzje: decyzje || [], loty: loty || [], zdarzenia: zdarzenia || [], obserwacjeOperatora: obserwacjeOperatora || []});
   if (misja && misja.przebieg !== przebieg) {
     przebieg = misja.przebieg; await resetMapy();
     if (misja.ziarno != null) { $("ziarno").value = misja.ziarno; $("strategia").value = misja.strategia || "B"; }
   }
-  rysujPasek(); rysujKpi(); rysujMape(); rysujDrony(); rysujSym(); rysujNakladke(); rysujWode();
+  rysujPasek(); rysujKpi(); rysujMape(); rysujOperatora(); rysujDrony(); rysujSym(); rysujNakladke(); rysujWode();
   const minuta = misja ? Math.floor(misja.minuta_lotu) : 0;
   const edycja = document.activeElement && document.activeElement.closest && document.activeElement.closest("#meldunki");
   if (!edycja && zmienione("lista", [stan.meldunki.map(m => m.id + m.czas), stan.decyzje.length, wybrany, minuta, stan.wsie.map(w => w.status)])) rysujListe();
@@ -330,7 +359,7 @@ function rysujPasek() {
     (m ? ` · ${m.etap === "zwiad" ? (m.strategia === "A" ? "zwiad dróg (przegląd wszystkich przy ciekach)" : "zwiad dróg (najpierw odcinki rozstrzygające)") : m.etap}` : "") : "Lot: —";
   const zgoda = lot && lot.status === "propozycja" && !stan.decyzje.some(d => d.dotyczy === lot.id);
   if (zmienione("zgoda", [zgoda, lot && lot.id])) $("zgoda").innerHTML = zgoda
-    ? `<button class="tak" onclick="decyzja('${lot.id}','decyzja','zatwierdzona')">Zatwierdź start drona</button> <button class="nie" onclick="decyzja('${lot.id}','decyzja','odrzucona')">Odrzuć</button>` : "";
+    ? `<button class="tak" onclick="decyzja('${lot.id}','decyzja','zatwierdzona')">Uruchom symulowany lot</button> <button class="nie" onclick="decyzja('${lot.id}','decyzja','odrzucona')">Odrzuć</button>` : "";
 }
 
 function rysujKpi() {
@@ -477,7 +506,10 @@ function cechy() {
       properties: {id: o.id, droga: o.droga, stan: z.stan || o.stan, czas_obserwacji: z.czas_obserwacji || null,
                    zrodlo: z.zrodlo ? z.zrodlo.typ : (o.zrodlo ? o.zrodlo.typ : null), most: o.most, lesny: o.lesny, symulowane: !!z.symulowane}}; })
     .concat(stan.wsie.map(w => ({type: "Feature", geometry: {type: "Point", coordinates: [w.polozenie[1], w.polozenie[0]]},
-      properties: {id: w.id, nazwa: w.nazwa, status: w.status, dojazd: w.dojazd, status_czas: w.status_czas}})));
+      properties: {id: w.id, nazwa: w.nazwa, status: w.status, dojazd: w.dojazd, status_czas: w.status_czas}})))
+    .concat(stan.obserwacjeOperatora.map(o => ({type: "Feature", geometry: {type: "Point", coordinates: [o.gps[1], o.gps[0]]},
+      properties: {id: o.id, rodzaj: "obserwacja", typ: o.typ, liczba: o.liczba, operator: o.operator,
+        czas: o.czas_potwierdzenia, obraz: o.obraz, material: o.material, zrodlo: o.zrodlo, potwierdzone: true}})));
 }
 function zapiszPlik(nazwa, tresc, typ) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([tresc], {type: typ})); a.download = nazwa; a.click();
@@ -487,7 +519,10 @@ $("kml").onclick = () => {
   const kolor = {zalany: "ffeb6325", zerwany: "ff2626dc", zablokowany: "ff2626dc", przejezdny: "ff3d8015", nieznany: "ff80756b"};
   const pm = cechy().filter(f => f.geometry.type === "LineString" && !(f.properties.lesny && f.properties.stan === "nieznany")).map(f =>
     `<Placemark><name>${f.properties.droga} ${f.properties.id}: ${f.properties.stan}</name><Style><LineStyle><color>${kolor[f.properties.stan]}</color><width>4</width></LineStyle></Style>` +
-    `<LineString><coordinates>${f.geometry.coordinates.map(c => c.join(",")).join(" ")}</coordinates></LineString></Placemark>`).join("");
+    `<LineString><coordinates>${f.geometry.coordinates.map(c => c.join(",")).join(" ")}</coordinates></LineString></Placemark>`).join("") +
+    cechy().filter(f => f.properties.rodzaj === "obserwacja").map(f =>
+      `<Placemark><name>${htm(typOperatora[f.properties.typ] || f.properties.typ)}</name><description>${htm(f.properties.operator)} · ${htm(f.properties.czas)}</description>` +
+      `<Point><coordinates>${f.geometry.coordinates.join(",")}</coordinates></Point></Placemark>`).join("");
   zapiszPlik("aeropass.kml", `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>AeroPass</name>${pm}</Document></kml>`, "application/vnd.google-earth.kml+xml");
 };
 start();

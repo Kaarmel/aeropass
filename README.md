@@ -1,13 +1,15 @@
 # AeroPass
 
-**Autonomiczny zwiad dronowy przejezdności dróg i zalania ulic dla PSP i OSP.**
-Po alarmie powodziowym drony same sprawdzają najpierw te odcinki dróg, od których zależy dojazd do wsi. Stanowisko kierowania dostaje odpowiedź: *którędy i jakim pojazdem dojedziemy do każdej miejscowości*, ze źródłem, wiekiem i oznaczeniem niepewności. Decyzję podejmuje człowiek.
+**Analiza zdjęć z istniejących dronów dla operatora PSP/OSP i sztabu.**
+Operator prowadzi lot własnym sprzętem DJI, wskazuje miejsce obserwacji na mapie lub kontrolerze i przekazuje zdjęcie na komputer. Model podsuwa możliwe opisy obrazu. Operator ogląda zdjęcie, wybiera lub poprawia opis, wpisuje GPS i zatwierdza obserwację. Sztab widzi potwierdzony punkt z obrazem, źródłem i czasem. Oprogramowanie nie steruje dronem, a moduł obserwacji nie orzeka o przejezdności rzeczywistej drogi.
 
 Projekt na Dual Use Hackathon 2026 (Carpathian Drone Summit, Jasionka). Scenariusz demo: **dolina Solinki i Wetlinki (Bieszczady)**.
 
-## Wyniki
+**Punkt odniesienia:** [DJI FlightHub 2](https://enterprise.dji.com/flighthub-2) już oferuje adnotacje na mapie, alerty AI z lokalizacją i obrazem oraz raporty, a [TAK](https://tak.gov/solutions/recreation) obsługuje geolokalizowane zdjęcia. AeroPass nie może więc opierać swojej wartości na samym pokazaniu zdjęcia na mapie. Hipotezą do sprawdzenia w pilotażu jest uporządkowany opis zdarzenia powodziowego zatwierdzany przez operatora i jego przydatność dla sztabu wobec obecnego obiegu pracy. Integracja z FlightHub 2 i TAK nie jest gotowa.
 
-**Symulacja 40 powodzi na prawdziwej sieci dróg doliny** (OSM; 359 odcinków utwardzonych przy ciekach, 119 km). Z 30 wsi 28 ma początkowo nieznany dojazd; poniższe odsetki dotyczą tych 28 wsi. 4 drony, każdy ze swojej stacji dokującej:
+## Wyniki prac badawczych i symulacji
+
+**Historyczny benchmark planera:** symulacja 40 powodzi na prawdziwej sieci dróg doliny (OSM; 359 odcinków utwardzonych przy ciekach, 119 km). Z 30 wsi 28 ma początkowo nieznany dojazd; poniższe odsetki dotyczą tych 28 wsi. Założono 4 równolegle latające drony i idealną obserwację. To porównanie algorytmów, **nie pomiar pracy operatora ani obietnica czasu akcji**:
 
 | | AeroPass: najpierw odcinki rozstrzygające | Przegląd wszystkich dróg przy ciekach |
 |---|---|---|
@@ -20,9 +22,9 @@ Projekt na Dual Use Hackathon 2026 (Carpathian Drone Summit, Jasionka). Scenariu
 
 Szczegóły i założenia: [`wyniki/monte_carlo.json`](wyniki/monte_carlo.json), wykres dla 1 drona: [`wyniki/monte_carlo_1dron.png`](wyniki/monte_carlo_1dron.png).
 
-**Rozmieszczenie stacji dokujących** (faza przygotowania): algorytm wybrał 4 miejscowości (Przysłup, Terka, Tyskowa, Wetlina), z których drony sięgają **118,8 z 119,2 km** dróg przy ciekach (22 min użytecznego lotu, 12 m/s).
+**Eksperyment z rozmieszczeniem punktów startu** (nie plan zakupowy): algorytm wybrał 4 miejscowości (Przysłup, Terka, Tyskowa, Wetlina), z których w przyjętym modelu zasięgu osiągalne jest **118,8 z 119,2 km** dróg przy ciekach (22 min użytecznego lotu, 12 m/s).
 
-**Model AI: zalana czy przejezdna** (YOLO11n-seg, 25 epok, FloodNet, oficjalny podział; ocena na **zbiorze testowym** 448 zdjęć, z czego 253 z widoczną jezdnią):
+**Historyczna ocena modelu YOLO na zdjęciach FloodNet:** klasy „zalana” i „sucha droga” (YOLO11n-seg, 25 epok, oficjalny podział; **zbiór testowy** 448 zdjęć, z czego 253 z widoczną jezdnią). „Sucha” oznacza brak widocznego zalania na tym obrazie, a nie gwarancję przejezdności:
 
 | Decyzja na zdjęciu | Wynik |
 |---|---|
@@ -48,17 +50,18 @@ Szczegóły i założenia: [`wyniki/monte_carlo.json`](wyniki/monte_carlo.json),
 | Sieć dróg, mosty, cieki i wsie doliny Solinki i Wetlinki | **prawdziwe** (OpenStreetMap, `dane/osm/`) |
 | Progi alarmowe wodowskazu Kalnica (Wetlina), wiatr w Lesku | **prawdziwe** (API IMGW, `dane/imgw/`) |
 | Planer (wybór odcinków), status wsi dla klas pojazdów, trasy, meldunki z szablonu | **prawdziwy kod** (`planer/`) |
-| Rozmieszczenie stacji dokujących | **prawdziwy kod**; miejscowości jako przybliżenie lokalizacji remiz OSP |
+| Rozmieszczenie punktów startu | **prawdziwy kod symulacji**; miejscowości jako przybliżenie lokalizacji remiz OSP |
 | Model segmentacji zalanych dróg i jego metryka | **prawdziwy trening** na FloodNet (`ai/trening/aeropass_trening.ipynb`) |
 | 1500 zdjęć lotniczych LADI v2 | **prawdziwa biblioteka referencyjna**, bez treningu i bez wpływu na wyniki modelu (`dane/ladi/`) |
-| Panel stanowiska kierowania, zatwierdzanie, dziennik decyzji, eksport GeoJSON/KML | **działa** (`panel/`) |
+| Panel sztabu, zatwierdzanie, dziennik decyzji, eksport GeoJSON/KML | **działa** (`panel/`) |
+| Zdjęcie lub klatka z kamery → propozycje CLIP → wybór operatora → punkt GPS na mapie | **działa lokalnie** (`ai/kamera.py`, `panel/`); GPS wpisywany przez operatora |
 | Przyciski symulacji w panelu, analiza filmu z poligonami YOLO | **działa** (`panel/`, `ai/film.py`); film dostarcza użytkownik |
 | Poziom wody ponad progiem, porywy wiatru | symulowane |
 | Które odcinki są zalane lub zerwane (`scenariusz/`) | **symulowane** (prawdopodobieństwa w `planer/scenariusz.py`) |
 | Przelot dronów, obrazy z drona | symulowane (obrazy zastępcze z FloodNet) |
-| Stacje dokujące, loty BVLOS, integracja z systemami PSP | koncepcja |
+| Import zdjęć i GPS bezpośrednio z DJI lub integracja z systemami PSP | koncepcja; obecny pokaz używa ręcznego przekazania pliku i GPS |
 
-W danych każdy obiekt ma pole `"symulowane"`, a panel pokazuje, co jest założeniem, a co obserwacją.
+Obiekty symulacji mają pole `"symulowane"`. Potwierdzone punkty operatora mają osobno `material` (`demo` albo deklarowane `lot`) oraz identyfikator operatora.
 
 ## Jak uruchomić
 
@@ -75,13 +78,13 @@ W panelu, na pasku **Symulacja**:
 1. Opcjonalnie wybierz numer scenariusza albo kliknij **🎲 Nowa losowa powódź**. Scenariusz 56 to ten z prezentacji.
 2. Opcjonalnie kliknij drogę przy cieku, żeby ją zalać; drugi klik zrywa most albo blokuje drogę, trzeci usuwa zmianę. Fioletowa linia to scenariusz, którego system nie zna, dopóki dron go nie sprawdzi. **Pokaż prawdę scenariusza** odsłania całą wylosowaną powódź.
 3. Wybierz strategię: AeroPass (najpierw odcinki rozstrzygające) albo przegląd wszystkich dróg przy ciekach.
-4. **▶ Start**, a potem **Zatwierdź start drona**, bo decyduje człowiek. **⏸ Pauza**, **Tempo** i **↺ Reset** działają w trakcie.
+4. **▶ Start**, a potem **Uruchom symulowany lot**. **⏸ Pauza**, **Tempo** i **↺ Reset** działają w trakcie.
 
 Kafelek „min do ustalenia 50% / 90% wsi” służy do porównania strategii na tym samym scenariuszu. AeroPass szybciej ustala dojazd do 90% wsi w każdej z 40 powodzi z wykresu i w 35 z kolejnych 40 losowań (scenariusze 1–40). Scenariusz 56 jest wyjątkiem: połowę wsi ustala w 30 zamiast 61 min, ale 90% o 10 min później. Do porównania na żywo lepsze są np. scenariusze 7 i 21.
 
 - Bez panelu: `python symulator/demo.py --tempo 3 [--auto] [--ziarno 56] [--strategia A|B]`.
 - `python planer/monte_carlo.py 40` przelicza symulację i wykresy (ok. 1 min).
-- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python testy/test_demo_inputs.py`, `python testy/test_monte_carlo_determinism.py`, `python testy/test_kamera.py`, `python ai/film.py --test`.
+- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python testy/test_demo_inputs.py`, `python testy/test_monte_carlo_determinism.py`, `python testy/test_kamera.py`, `python testy/test_operator.py`, `python ai/film.py --test`.
 - Integralność zdjęć LADI v2: `python dane/ladi/import_ladi.py --check`.
 
 ### Analiza filmu z drona (offline, po locie)
@@ -93,7 +96,7 @@ W panelu kliknij **Analiza filmu z drona ↗** (albo otwórz http://localhost:87
 - Wynik trafia do `film/wyniki/<nazwa>/`: film MP4 (H.264), 4 kadry PNG do slajdów, `podsumowanie.json` z szybkością przetwarzania.
 - Katalog `film/` jest poza gitem; filmy z internetu mają własne licencje.
 - Model uczył się na ujęciach z drona z góry (FloodNet, Teksas). Na ujęciach z innej perspektywy myli się, np. na zdjęciach LADI v2 pod kątem oznaczał rzekę jako suchą drogę. Wynik na każdym nowym nagraniu jest niezweryfikowany.
-- Dlaczego offline: na MacBooku z M2 Pro analiza idzie z prędkością ok. 23 kl./s dla 1080p i 27–33 kl./s dla 720p, więc laptop nie jest wąskim gardłem. Wąskie gardło to dron: w locie poza zasięgiem wzroku łącze nie przeniesie pełnej rozdzielczości, a dron bez dodatkowego modułu obliczeniowego nie uruchomi własnego modelu. Planujemy analizę zdjęć w pełnej rozdzielczości po powrocie do stacji dokującej. Do decyzji wystarczy jedna ocena na odcinek, a nie 25 na sekundę.
+- Film można przeanalizować po przekazaniu pliku z kontrolera DJI na komputer. Nie zakładamy określonego łącza danych, lotu poza zasięgiem wzroku ani dodatkowego modułu na dronie.
 
 ### Model na kamerce (proof of concept)
 
@@ -104,38 +107,37 @@ pip install "transformers[torch]" pillow
 python ai/kamera.py
 ```
 
-Otwórz **http://localhost:8767/** i kliknij „Włącz kamerę” albo wybierz zdjęcie. Lokalny serwer analizuje klatkę co około 1,5 s. Klatki nie są zapisywane. Wynik CLIP to względne dopasowanie do opisów, nie prawdopodobieństwo zalania ani potwierdzenie przejezdności. Wytrenowany na ujęciach z drona model YOLO (`ai/model/best.pt`) i jego wcześniejsze predykcje na FloodNet pozostają w repo; nie są używane do klasyfikacji obrazu z kamerki.
+Otwórz **http://localhost:8767/** i kliknij „Włącz kamerę” albo wybierz zdjęcie. Lokalny serwer analizuje klatkę co około 1,5 s. Klatki z podglądu nie są zapisywane. Wgrane zdjęcie lub klatkę zachowaną przyciskiem można potem opisać, podać GPS, operatora i źródło oraz zatwierdzić. Zatwierdzone punkty pojawią się w panelu **http://localhost:8765/panel/** i w eksporcie GeoJSON/KML. Punkt dotyczy miejsca zdarzenia wskazanego przez operatora, nie pozycji drona. Zapisane obrazy i obserwacje są w ignorowanym przez git katalogu `stan/`. Wynik CLIP to względne dopasowanie do opisów, nie prawdopodobieństwo zalania ani potwierdzenie przejezdności. Wytrenowany na ujęciach z drona model YOLO (`ai/model/best.pt`) i jego wcześniejsze predykcje na FloodNet pozostają w repo; nie są używane do klasyfikacji obrazu z kamerki.
+
+**Pokaz dwóch ról:** uruchom w dwóch terminalach `python panel/serwer.py` oraz `python ai/kamera.py` w tym samym środowisku z zależnościami. W pierwszej karcie otwórz panel sztabu, w drugiej interfejs operatora. Wgraj zdjęcie, sprawdź sugestie modelu, wybierz np. „Widoczne zalanie” lub wpisz liczbę powalonych drzew ręcznie, podaj GPS i zatwierdź. Panel sztabu pokaże punkt ze zdjęciem i informacją, kto go potwierdził. Ten punkt nie zmienia automatycznie statusu drogi w symulacji.
 
 ## Jak to działa
 
-1. **Potrzeba:** demo podstawia poziom wody ponad prawdziwy próg alarmowy IMGW i proponuje symulowaną misję.
-2. **Warunki lotu w demo:** wiatr z zapisanego pomiaru IMGW i symulowane porywy są porównywane z progami. Opad i przestrzeń powietrzna pozostają niezweryfikowane; ocena pogody nie jest zgodą na rzeczywisty lot. Operator uruchamia tylko symulację.
-3. **Zwiad:** każdy dron w swoim sektorze wybiera odcinek, który leży na najkrótszej możliwej trasie największej liczby wsi o nieustalonym dojeździe, w stosunku do kosztu dolotu. Po każdej obserwacji planuje od nowa.
-4. **Analiza:** model rozpoznaje zalaną lub niezalaną jezdnię; dla odcinków przy ciekach brak dowodu = „nie wiadomo”. Odcinki z dala od cieków są w symulacji przyjęte jako przejezdne bez obserwacji.
-5. **Status wsi** dla wozu ciężkiego i terenowego:
-   - „dostępna” w symulacji: istnieje trasa po odcinkach obserwowanych jako przejezdne lub przyjętych jako przejezdne z dala od cieków; meldunek wskazuje, ile odcinków opiera się na tym założeniu,
-   - „odcięta”: nie ma trasy nawet przy założeniu, że nieznane odcinki są przejezdne,
-   - „nie wiadomo”: wszystko pomiędzy.
+1. **Operator:** sam planuje i prowadzi lot zgodnie z procedurami swojej jednostki. AeroPass może wskazać odcinki warte uwagi na podstawie sieci dróg, ale nie wysyła komend do DJI.
+2. **Materiał:** operator przekazuje zdjęcie lub klatkę na komputer. W pokazie wybiera plik; automatyczny import z DJI nie jest zaimplementowany.
+3. **Analiza:** CLIP proponuje opisy sceny, a operator może je odrzucić i wpisać własną obserwację, np. liczbę drzew. Procenty są względnym dopasowaniem tekstu do obrazu, nie skalibrowanym prawdopodobieństwem.
+4. **Meldunek:** po zatwierdzeniu punkt z GPS, zdjęciem, źródłem, czasem i nazwą operatora pojawia się na mapie sztabu i w eksporcie GIS. Sztab weryfikuje i decyduje o działaniu. Nieustalona przejezdność pozostaje nieustalona.
 
-   Drogi leśne liczą się tylko dla pojazdu terenowego i tylko po sprawdzeniu.
-6. **Meldunek z szablonu (bez LLM):** fakty, ocena, rekomendacja i termin decyzji, a każde zdanie ma źródło.
-7. **Decyzja:** dyżurny zatwierdza, zmienia albo odrzuca; potem potwierdza wykonanie. Wszystko trafia do dziennika.
+**Oddzielny moduł symulacyjny** nadal ilustruje badawczy planer tras. W nim odcinki z dala od cieków są przyjęte jako przejezdne bez obserwacji. Symulowane loty i ich czasy nie opisują działania operatora w terenie.
+
+Status wsi w symulacji: „dostępna” oznacza trasę po odcinkach obserwowanych lub przyjętych jako przejezdne z dala od cieków; „odcięta” oznacza brak trasy nawet gdy nieznane drogi uznamy za otwarte; „nie wiadomo” to pozostałe przypadki. Drogi leśne liczą się tylko dla pojazdu terenowego i dopiero po sprawdzeniu.
+
+Meldunki z szablonu i dziennik decyzji w panelu są częścią osobnego scenariusza demonstracyjnego.
 
 Format danych między modułami: [docs/FORMAT.md](docs/FORMAT.md).
 
 ## Dual-use
 
-Ta sama warstwa rozpoznania przejezdności tras służy **WOT i wojsku** do planowania konwojów z pomocą i ewakuacji ludności (WOT wspierała ludność podczas powodzi 2024). Zastosowanie jest wyłącznie defensywne i organizacyjne. Eksport GeoJSON/KML pozwala przekazać wynik do innych systemów.
+Ten sam format potwierdzonej obserwacji terenowej może wesprzeć **PSP/OSP** oraz zespoły wojskowe podczas działań związanych z powodzią. Eksport GeoJSON/KML pozwala przekazać punkt z GPS do innych narzędzi. Integracja z systemami służb nie została sprawdzona.
 
 ## Ograniczenia (znane)
 
 - Obserwacja w symulacji jest bezbłędna: stan odcinka pochodzi ze scenariusza, a zdjęcie FloodNet tylko ilustruje podobny stan i pokazuje osobną predykcję modelu. Demo nie uruchamia modelu na obrazie tego odcinka; błąd AI raportujemy osobno.
 - Pewność statusu drogi i wsi nie jest kalibrowana; pole `pewnosc` ma w demo wartość `null`, zamiast arbitralnej liczby. Panel pokazuje „nieoszacowana”.
 - Odcinki utwardzone z dala od cieków są w scenariuszu przyjęte jako przejezdne bez obserwacji. Status „dostępna” i czasy Monte Carlo są warunkowe wobec tego założenia; nie potwierdzają bezpiecznego dojazdu w rzeczywistej powodzi.
-- Parametry lotu (22 min użytecznych, 12 m/s, 3 min wymiany baterii) to założenia dla platformy klasy DJI Matrice 30; trzeba je skalibrować testem.
-- Loty BVLOS wymagają zezwolenia w kategorii szczególnej; propozycja: korytarze wzdłuż rzek zatwierdzone przed sezonem powodziowym.
+- Parametry lotu (22 min użytecznych, 12 m/s, 3 min wymiany baterii) są wyłącznie założeniami starej symulacji; nie stosujemy ich do pracy operatora.
 - Model trenowany na zdjęciach z Teksasu; potrzebny test na zdjęciach z Polski.
-- Pokaz z kamerki używa CLIP bez douczenia na zalanych ulicach. Sprawdziliśmy kierunek wyniku na 3 zalanych i 3 suchych zdjęciach, w tym na klatce zgłoszonej przez użytkownika; to za mało do oceny skuteczności. Nie używać do decyzji operacyjnych.
+- Pokaz z kamerki używa CLIP bez douczenia na zalanych ulicach. Sprawdziliśmy kierunek wyniku na 3 zalanych i 3 suchych zdjęciach, w tym na klatce zgłoszonej przez użytkownika; to za mało do oceny skuteczności. Zatwierdzenie operatora jest zapisem obserwacji człowieka, a nie dowodem, że model działa poprawnie na polskich lotach.
 
 ## Użycie AI i zasobów zewnętrznych
 
