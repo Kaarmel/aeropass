@@ -2,16 +2,20 @@
 Serwer panelu AeroPass (tylko biblioteka standardowa, działa bez internetu).
 Serwuje katalog repo (panel/, stan/, wyniki/) i przyjmuje decyzje: POST /api/decyzja → dopisanie do stan/decyzje.json.
 Przyciski symulacji: POST /api/sterowanie {akcja: start|reset|pauza|wznow|tempo} uruchamia demo.py jako proces potomny.
+Analiza filmu: POST /api/film?nazwa=…&zrodlo=… (plik w treści) → ai/film.py w tle → film/wyniki/<nazwa>/ (panel/film.html).
 
 Uruchomienie z katalogu repo: python panel/serwer.py   →   http://localhost:8765/panel/
 """
+import importlib.util
 import json
+import re
 import subprocess
 import sys
 import threading
 from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 KATALOG = Path(__file__).resolve().parent.parent
 DECYZJE = KATALOG / "stan" / "decyzje.json"
@@ -19,6 +23,25 @@ TYPY = {"decyzja": {"zatwierdzona", "odrzucona", "zmieniona"},
         "potwierdzenie_wykonania": {"zadysponowano", "w_drodze", "dotarlo", "niewykonane"}}
 blokada = threading.Lock()
 demo = {"proc": None, "ziarno": 56, "strategia": "B", "przygotuj": False}
+analiza = {"proc": None}
+FILMY = {".mp4", ".mov", ".m4v", ".avi", ".mkv"}
+MAKS_FILM = 4 * 1024**3
+
+
+def wyniki_filmow():
+    out = []
+    for d in sorted((KATALOG / "film" / "wyniki").glob("*/"), key=lambda d: d.stat().st_mtime, reverse=True):
+        wpis = {"katalog": f"film/wyniki/{d.name}/"}
+        for nazwa in ("postep", "podsumowanie"):
+            try:
+                wpis[nazwa] = json.loads((d / f"{nazwa}.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+        out.append(wpis)
+    p = analiza["proc"]
+    return {"trwa": bool(p and p.poll() is None), "wyniki": out,
+            "blad": (KATALOG / "film" / "analiza.log").read_text(encoding="utf-8", errors="replace")[-600:]
+            if p and p.poll() not in (None, 0) else None}
 
 
 def uruchom_demo(ziarno, strategia, tempo, reczne, przygotuj):
@@ -76,7 +99,68 @@ class Obsluga(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.split("?")[0] == "/api/sterowanie":
             return self.odpowiedz(sterowanie())
+        if self.path.split("?")[0] == "/api/film":
+            return self.odpowiedz(wyniki_filmow())
+        zakres = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers.get("Range", ""))
+        plik = Path(self.translate_path(self.path))
+        if zakres and any(zakres.groups()) and plik.is_file():
+            return self.fragment(plik, *zakres.groups())
         super().do_GET()
+
+    def fragment(self, plik, a, b):
+        """Odpowiedź 206 na Range: bez tego Safari nie odtworzy filmu w <video>."""
+        rozmiar = plik.stat().st_size
+        start = int(a) if a else max(0, rozmiar - int(b))
+        koniec = min(int(b), rozmiar - 1) if a and b else rozmiar - 1
+        if start > koniec:
+            return self.send_error(416)
+        self.send_response(206)
+        self.send_header("Content-Type", self.guess_type(str(plik)))
+        self.send_header("Content-Range", f"bytes {start}-{koniec}/{rozmiar}")
+        self.send_header("Content-Length", str(koniec - start + 1))
+        self.send_header("Accept-Ranges", "bytes")
+        self.end_headers()
+        with open(plik, "rb") as f:
+            f.seek(start)
+            reszta = koniec - start + 1
+            while reszta > 0:
+                kawalek = f.read(min(reszta, 1 << 20))
+                if not kawalek:
+                    break
+                self.wfile.write(kawalek)
+                reszta -= len(kawalek)
+
+    def film(self):
+        """Wgranie filmu (surowa treść żądania, zapis kawałkami) i start analizy offline w tle."""
+        q = parse_qs(urlparse(self.path).query)
+        nazwa = re.sub(r"[^\w.-]", "_", Path(q.get("nazwa", [""])[0]).name)[:80].lstrip(".")
+        zrodlo = q.get("zrodlo", [""])[0].strip()[:200]
+        dlugosc = int(self.headers.get("Content-Length", 0))
+        if Path(nazwa).suffix.lower() not in FILMY:
+            return self.odpowiedz({"blad": f"obsługiwane pliki: {', '.join(sorted(FILMY))}"}, 400)
+        if not zrodlo:
+            return self.odpowiedz({"blad": "podaj źródło i licencję filmu (wymóg regulaminu)"}, 400)
+        if not 0 < dlugosc <= MAKS_FILM:
+            return self.odpowiedz({"blad": "pusty albo za duży plik (maks. 4 GB)"}, 400)
+        if not importlib.util.find_spec("ultralytics"):
+            return self.odpowiedz({"blad": f"brak ultralytics w {sys.executable}: pip install ultralytics "
+                                           "albo uruchom serwer z venv, w którym jest model"}, 400)
+        if analiza["proc"] and analiza["proc"].poll() is None:
+            return self.odpowiedz({"blad": "trwa analiza innego filmu"}, 409)
+        cel = KATALOG / "film" / "wejscie" / nazwa
+        cel.parent.mkdir(parents=True, exist_ok=True)
+        with open(cel, "wb") as f:
+            reszta = dlugosc
+            while reszta:
+                kawalek = self.rfile.read(min(reszta, 1 << 20))
+                if not kawalek:
+                    return self.odpowiedz({"blad": "przerwane wysyłanie"}, 400)
+                f.write(kawalek)
+                reszta -= len(kawalek)
+        log = open(KATALOG / "film" / "analiza.log", "w")
+        analiza["proc"] = subprocess.Popen([sys.executable, "ai/film.py", str(cel), "--zrodlo", zrodlo],
+                                           cwd=KATALOG, stdout=log, stderr=subprocess.STDOUT)
+        self.odpowiedz({"ok": True, "plik": nazwa})
 
     def steruj(self):
         try:
@@ -105,6 +189,8 @@ class Obsluga(SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/sterowanie":
             return self.steruj()
+        if self.path.startswith("/api/film"):
+            return self.film()
         if self.path != "/api/decyzja":
             return self.send_error(404)
         try:
@@ -147,3 +233,5 @@ if __name__ == "__main__":
         pass
     finally:
         zatrzymaj_demo()
+        if analiza["proc"] and analiza["proc"].poll() is None:
+            analiza["proc"].terminate()

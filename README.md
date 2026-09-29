@@ -52,6 +52,7 @@ Szczegóły i założenia: [`wyniki/monte_carlo.json`](wyniki/monte_carlo.json),
 | Model segmentacji zalanych dróg i jego metryka | **prawdziwy trening** na FloodNet (`ai/aeropass_trening.ipynb`) |
 | 1500 zdjęć lotniczych LADI v2 | **prawdziwa biblioteka referencyjna**, bez treningu i bez wpływu na wyniki modelu (`dane/ladi/`) |
 | Panel stanowiska kierowania, zatwierdzanie, dziennik decyzji, eksport GeoJSON/KML | **działa** (`panel/`) |
+| Przyciski symulacji w panelu, analiza filmu z poligonami YOLO | **działa** (`panel/`, `ai/film.py`); film dostarcza użytkownik |
 | Poziom wody ponad progiem, porywy wiatru | symulowane |
 | Które odcinki są zalane lub zerwane (`scenariusz/`) | **symulowane** (prawdopodobieństwa w `planer/scenariusz.py`) |
 | Przelot dronów, obrazy z drona | symulowane (obrazy zastępcze z FloodNet) |
@@ -61,19 +62,38 @@ W danych każdy obiekt ma pole `"symulowane"`, a panel pokazuje, co jest założ
 
 ## Jak uruchomić
 
-Wymaga Pythona 3.10+ (sprawdzone na 3.14).
+Wymaga Pythona 3.10+ (sprawdzone na 3.14) i ffmpeg (tylko do analizy filmu).
 
 ```bash
 python3 -m venv ~/.venvs/aeropass && source ~/.venvs/aeropass/bin/activate
-pip install networkx matplotlib
-python panel/serwer.py        # terminal 1 → http://localhost:8765/panel/
-python demo.py --tempo 3      # terminal 2; w panelu kliknij „Zatwierdź start drona”
+pip install networkx matplotlib ultralytics
+python panel/serwer.py        # → http://localhost:8765/panel/
 ```
 
-- `python demo.py --auto` zatwierdza start automatycznie.
+W panelu, na pasku **Symulacja**:
+
+1. Opcjonalnie wybierz numer scenariusza albo kliknij **🎲 Nowa losowa powódź**. Scenariusz 56 to ten z prezentacji.
+2. Opcjonalnie kliknij drogę przy cieku, żeby ją zalać; drugi klik zrywa most albo blokuje drogę, trzeci usuwa zmianę. Fioletowa linia to scenariusz, którego system nie zna, dopóki dron go nie sprawdzi. **Pokaż prawdę scenariusza** odsłania całą wylosowaną powódź.
+3. Wybierz strategię: AeroPass (najpierw odcinki rozstrzygające) albo przegląd wszystkich dróg przy ciekach.
+4. **▶ Start**, a potem **Zatwierdź start drona**, bo decyduje człowiek. **⏸ Pauza**, **Tempo** i **↺ Reset** działają w trakcie.
+
+Kafelek „min do ustalenia 50% / 90% wsi” służy do porównania strategii na tym samym scenariuszu. AeroPass szybciej ustala dojazd do 90% wsi w każdej z 40 powodzi z wykresu i w 35 z kolejnych 40 losowań (scenariusze 1–40). Scenariusz 56 jest wyjątkiem: połowę wsi ustala w 30 zamiast 61 min, ale 90% o 10 min później. Do porównania na żywo lepsze są np. scenariusze 7 i 21.
+
+- Bez panelu: `python demo.py --tempo 3 [--auto] [--ziarno 56] [--strategia A|B]`.
 - `python planer/monte_carlo.py 40` przelicza symulację i wykresy (ok. 1 min).
-- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python test_demo_inputs.py`, `python test_monte_carlo_determinism.py`, `python test_kamera.py`.
+- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python test_demo_inputs.py`, `python test_monte_carlo_determinism.py`, `python test_kamera.py`, `python ai/film.py --test`.
 - Integralność zdjęć LADI v2: `python ai/import_ladi.py --check`.
+
+### Analiza filmu z drona (offline, po locie)
+
+W panelu kliknij **Analiza filmu z drona ↗** (albo otwórz http://localhost:8765/panel/film.html). Wybierz film, wpisz jego źródło i licencję, potem **Wgraj i analizuj**. Z terminala: `python ai/film.py film.mp4 --zrodlo "autor, link, licencja"`.
+
+- Każda klatka przechodzi przez model YOLO11n-seg (`wyniki/best.pt`). Na filmie pojawiają się poligony: zalana droga, sucha droga, zalany budynek.
+- Pasek u góry filmu to ocena odcinka z ostatniej sekundy. Zalanie wygrywa już przy ¼ klatek, przejezdność wymaga większości, a brak dowodu to „nie wiadomo”.
+- Wynik trafia do `film/wyniki/<nazwa>/`: film MP4 (H.264), 4 kadry PNG do slajdów, `podsumowanie.json` z szybkością przetwarzania.
+- Katalog `film/` jest poza gitem; filmy z internetu mają własne licencje.
+- Model uczył się na ujęciach z drona z góry (FloodNet, Teksas). Na ujęciach z innej perspektywy myli się, np. na zdjęciach LADI v2 pod kątem oznaczał rzekę jako suchą drogę. Wynik na każdym nowym nagraniu jest niezweryfikowany.
+- Dlaczego offline: na MacBooku z M2 Pro analiza idzie z prędkością ok. 23 kl./s dla 1080p i 27–33 kl./s dla 720p, więc laptop nie jest wąskim gardłem. Wąskie gardło to dron: w locie poza zasięgiem wzroku łącze nie przeniesie pełnej rozdzielczości, a dron bez dodatkowego modułu obliczeniowego nie uruchomi własnego modelu. Planujemy analizę zdjęć w pełnej rozdzielczości po powrocie do stacji dokującej. Do decyzji wystarczy jedna ocena na odcinek, a nie 25 na sekundę.
 
 ### Model na kamerce (proof of concept)
 
