@@ -53,7 +53,7 @@ def stan_poczatkowy(odcinki):
     return {o["id"]: "przejezdny" if (not zagrozony(o) and not o["lesny"]) else "nieznany" for o in odcinki}
 
 
-def zapisz(ziarno=7):
+def zapisz(ziarno=7, plik_prawdy="scenariusz/prawda.json"):
     odcinki, wsie, G, wz = wczytaj()
     prawda = losuj_prawde(odcinki, random.Random(ziarno))
     stany = stan_poczatkowy(odcinki)
@@ -77,7 +77,7 @@ def zapisz(ziarno=7):
     json.dump({"ziarno": ziarno, "symulowane": True,
                "zalozenia": {"P_ZERWANY_MOST": P_ZERWANY_MOST, "P_ZALANY_PRZY_POTOKU": P_ZALANY_PRZY_POTOKU,
                              "P_LESNY_PRZY_POTOKU": P_LESNY_PRZY_POTOKU},
-               "stany": prawda}, open("scenariusz/prawda.json", "w"), ensure_ascii=False)
+               "stany": prawda}, open(plik_prawdy, "w"), ensure_ascii=False)
     zle = sum(v != "przejezdny" for v in prawda.values())
     print(f"odcinki: {len(out_o)}, wsie: {len(out_w)}, nieprzejezdnych w prawdzie (symulowane): {zle}")
     print("status przed lotem:", {k: sum(v == k for v in status.values()) for k in ("dostepna", "nieznany", "odcieta")})

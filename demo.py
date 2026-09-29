@@ -10,8 +10,11 @@ obrazy z drona (zastępcze zdjęcia z FloodNet, jeśli są wyniki modelu).
 
 Uruchomienie z katalogu repo:
     python panel/serwer.py            # w osobnym terminalu, panel: http://localhost:8765/panel/
-    python demo.py [--tempo 3] [--auto]
---tempo: ile minut symulacji na sekundę; --auto: start drona zatwierdzany automatycznie po 3 s.
+    python demo.py [--tempo 3] [--auto] [--ziarno 56] [--strategia B]
+--tempo: ile minut symulacji na sekundę; --auto: start drona zatwierdzany automatycznie po 3 s;
+--ziarno: losowanie powodzi; --strategia: B = najpierw odcinki rozstrzygające, A = przegląd wszystkich dróg przy ciekach;
+--reczne: JSON {id_odcinka: stan} nadpisujący wylosowaną prawdę; --przygotuj: tylko zapisz stan początkowy.
+Panel uruchamia to samo przyciskami (panel/serwer.py); pauza i tempo są w stan/sterowanie.json.
 """
 import argparse
 import itertools
@@ -32,6 +35,7 @@ START = datetime.fromisoformat("2026-09-30T06:00:00+02:00")
 ZIARNO = 56  # scenariusz demo: 6 wsi odciętych dla wozu ciężkiego (w tym Wetlina), 2 z objazdem leśnym
 DRONY = 4    # po jednym na stację dokującą
 STAN = Path("stan")
+STRATEGIE = {"B": "najpierw odcinki rozstrzygające", "A": "przegląd wszystkich dróg przy ciekach"}
 NIEPRZEJEZDNE = meldunek.NIEPRZEJEZDNE
 
 
@@ -62,17 +66,24 @@ def mozna_latac(czas):
 
 
 class Demo:
-    def __init__(self, tempo, auto):
-        self.tempo, self.auto = tempo, auto
-        sc.zapisz(ZIARNO)  # statyczne stan/odcinki.json i stan/wsie.json
+    def __init__(self, tempo, auto, ziarno=ZIARNO, strategia="B", reczne=None):
+        self.tempo, self.auto, self.ziarno, self.strategia = tempo, auto, ziarno, strategia
+        self.przebieg, self.alarm = f"{ziarno}-{strategia}-{time.time():.0f}", None
+        STAN.mkdir(exist_ok=True)
+        zapisz("sterowanie.json", {"pauza": False, "tempo": tempo})
+        sc.zapisz(ziarno, STAN / "prawda.json")  # statyczne stan/odcinki.json i stan/wsie.json
         self.sw = mc.Swiat()
-        self.prawda = sc.losuj_prawde(self.sw.odc, random.Random(ZIARNO))
+        self.prawda = sc.losuj_prawde(self.sw.odc, random.Random(ziarno))
+        # ręczne zmiany z panelu (klik na odcinku); system ich nie zna, dopóki dron nie sprawdzi
+        self.prawda.update({k: v for k, v in (reczne or {}).items() if k in self.prawda and v in NIEPRZEJEZDNE | {"przejezdny"}})
         self.statyczne = {o["id"]: o for o in json.load(open(STAN / "odcinki.json", encoding="utf-8"))}
         self.wsie = {w["id"]: w for w in json.load(open(STAN / "wsie.json", encoding="utf-8"))}
         self.stany = sc.stan_poczatkowy(self.sw.odc)  # wiedza systemu (wszystkie klasy, także leśne)
         self.dyn, self.meldunki, self.zdarzenia = {}, {}, []
         self.drony = [list(p) for _, p in self.sw.stacje][:DRONY]
         self.status = {w: {"ciezarowy": "nieznany", "terenowy": "nieznany"} for w in self.wsie}
+        st0 = siec.status_wsi(self.sw.G, self.sw.wz, self.stany, "ciezarowy")
+        self.nieznane0, self.progi = [w for w, s in st0.items() if s == "nieznany"], {}  # do porównania strategii
         self.nr_mel, self.t0, self.ostatni_t = itertools.count(1), 0.0, 0.0
         wszystkie_przejezdne = {o["id"]: "przejezdny" for o in self.sw.odc if not o["lesny"]}
         self.normalnie = {w: siec.trasa(self.sw.G, self.sw.wz[w], wszystkie_przejezdne) or [] for w in self.wsie}
@@ -105,12 +116,17 @@ class Demo:
         if poz:
             self.drony[dron] = list(poz)
         ust = sum(s["ciezarowy"] != "nieznany" for s in self.status.values())
+        znane = sum(self.status[w]["ciezarowy"] != "nieznany" for w in self.nieznane0) / max(len(self.nieznane0), 1)
+        for p in (50, 90, 100):
+            if znane * 100 >= p and etap == "zwiad":
+                self.progi.setdefault(str(p), round(t_min))
         km = sum(self.statyczne[o]["dlugosc_m"] for o, d in self.dyn.items()) / 1000
         zapisz("misja.json", {"czas": self.zegar(t_min).isoformat(timespec="seconds"), "minuta_lotu": round(t_min, 1),
-                              "etap": etap, "drony": [{"polozenie": p, "stacja": self.sw.stacje[i][0]} for i, p in enumerate(self.drony)], "lot": self.lot["id"],
+                              "etap": etap, "przebieg": self.przebieg, "ziarno": self.ziarno, "strategia": self.strategia, "drony": [{"polozenie": p, "stacja": self.sw.stacje[i][0]} for i, p in enumerate(self.drony)], "lot": self.lot["id"],
                               "stacje": [{"nazwa": n, "polozenie": list(p)} for n, p in self.sw.stacje],
                               "alarm": self.alarm, "mozna_latac": self.lot.get("mozna_latac"),
-                              "postep": {"wsie_ustalone": ust, "wsie_razem": len(self.wsie), "km_sprawdzone": round(km, 1)},
+                              "postep": {"wsie_ustalone": ust, "wsie_razem": len(self.wsie), "km_sprawdzone": round(km, 1),
+                                          "min_do_proc_nieznanych": self.progi, "nieznane_na_starcie": len(self.nieznane0)},
                               "symulowane": True})
 
     def obserwuj(self, oid):
@@ -139,9 +155,22 @@ class Demo:
         self.odswiez(t_min, st_ciez)
         self.misja(t_min, "zwiad", poz, dron)
         zapisz("zmiany.json", self.dyn)
-        opoznienie = (t_min - self.ostatni_t) * 60 / (self.tempo * 60)
+        self.spij(t_min - self.ostatni_t)
         self.ostatni_t = t_min
-        time.sleep(min(opoznienie, 2.0))
+
+    def spij(self, dt_min):
+        """Tempo i pauza z panelu (stan/sterowanie.json); tempo = minuty symulacji na sekundę."""
+        s = self.sterowanie()
+        while s.get("pauza"):
+            time.sleep(0.3)
+            s = self.sterowanie()
+        time.sleep(min(dt_min / max(float(s.get("tempo") or self.tempo), 0.1), 2.0))
+
+    def sterowanie(self):
+        try:
+            return json.loads((STAN / "sterowanie.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
 
     def odswiez(self, t_min, st_ciez=None):
         teraz = self.zegar(t_min)
@@ -171,7 +200,7 @@ class Demo:
     def czekaj_na_zgode(self):
         self.lot["status"] = "propozycja"
         zapisz("loty.json", [self.lot])
-        self.zdarzenie(0, "lot", f"Propozycja lotu lot-001: {DRONY} drony, zwiad dróg przy ciekach, najpierw odcinki rozstrzygające. Czeka na zgodę operatora.")
+        self.zdarzenie(0, "lot", f"Propozycja lotu lot-001: {DRONY} drony, zwiad dróg przy ciekach, {STRATEGIE[self.strategia]}. Czeka na zgodę operatora.")
         self.misja(0, "czeka_na_zgode")
         t = time.time()
         while True:
@@ -224,7 +253,7 @@ class Demo:
         self.lot["mozna_latac"] = mozna_latac(self.zegar(0))
         self.zdarzenie(0, "pogoda", f"Ocena pogody w scenariuszu: {self.lot['mozna_latac']['poziom'].upper()} — {self.lot['mozna_latac']['powod']}. To nie jest zgoda na lot.")
         self.czekaj_na_zgode()
-        krzywa, _ = mc.symuluj(self.sw, self.prawda, "B", obserwuj=self.obserwuj, po_kroku=self.po_kroku, drony=DRONY)
+        krzywa, _ = mc.symuluj(self.sw, self.prawda, self.strategia, obserwuj=self.obserwuj, po_kroku=self.po_kroku, drony=DRONY)
         t_min, poz = krzywa[-1][0], None
         poz = self.sw.doki[0]
         self.zdarzenie(t_min, "lot", "Zwiad dróg zakończony. Sprawdzam objazdy leśne dla wsi odciętych.")
@@ -242,5 +271,13 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--tempo", type=float, default=3.0, help="minuty symulacji na sekundę")
     ap.add_argument("--auto", action="store_true", help="start drona zatwierdzany automatycznie")
+    ap.add_argument("--ziarno", type=int, default=ZIARNO, help="losowanie powodzi (56 = scenariusz z prezentacji)")
+    ap.add_argument("--strategia", choices=STRATEGIE, default="B")
+    ap.add_argument("--reczne", type=json.loads, default={}, help='np. \'{"odc-0042": "zalany"}\'')
+    ap.add_argument("--przygotuj", action="store_true", help="tylko stan początkowy (reset panelu)")
     a = ap.parse_args()
-    Demo(a.tempo, a.auto).uruchom()
+    d = Demo(a.tempo, a.auto, a.ziarno, a.strategia, a.reczne)
+    if a.przygotuj:
+        d.misja(0, "gotowy")
+    else:
+        d.uruchom()
