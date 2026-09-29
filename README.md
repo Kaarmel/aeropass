@@ -1,59 +1,105 @@
 # AeroPass
 
-> *(Jedno zdanie, do uzupełnienia.)* Propozycja: Sztab powiatowy podczas powodzi musi zdecydować, do której odciętej wsi wysłać pomoc najpierw. AeroPass: dron sam sprawdza drogi, od których zależy dojazd do wsi, i zbiera od mieszkańców zgłoszenia przez Wi-Fi, bez sieci komórkowej.
+**Autonomiczny zwiad dronowy przejezdności dróg i zalania ulic dla PSP i OSP.**
+Po alarmie powodziowym drony same sprawdzają najpierw te odcinki dróg, od których zależy dojazd do wsi. Stanowisko kierowania dostaje odpowiedź: *którędy i jakim pojazdem dojedziemy do każdej miejscowości*, ze źródłem, wiekiem i pewnością informacji. Decyzję podejmuje człowiek.
 
 *(Tu wstawić GIF z demo.)*
 
-Projekt na Dual Use Hackathon 2026 (Carpathian Drone Summit, Jasionka).
+Projekt na Dual Use Hackathon 2026 (Carpathian Drone Summit, Jasionka). Scenariusz demo: **dolina Solinki i Wetlinki (Bieszczady)**.
+
+## Wyniki
+
+**Symulacja 40 powodzi na prawdziwej sieci dróg doliny** (OSM; 359 odcinków utwardzonych przy ciekach, 119 km). 4 drony, każdy ze swojej stacji dokującej:
+
+| | AeroPass: najpierw odcinki rozstrzygające | Przegląd wszystkich dróg przy ciekach |
+|---|---|---|
+| mediana czasu do ustalenia dojazdu do **90% wsi** | **91 min** | 150 min |
+| mediana czasu do **100% wsi** | **111 min** | 158 min |
+| średnio wsi z ustalonym dojazdem **po 60 min** | **75%** | 68% |
+| (1 dron) mediana do 90% wsi | 357 min | 608 min |
+
+![wykres](wyniki/monte_carlo.png)
+
+Szczegóły i założenia: [`wyniki/monte_carlo.json`](wyniki/monte_carlo.json), wykres dla 1 drona: [`wyniki/monte_carlo_1dron.png`](wyniki/monte_carlo_1dron.png).
+
+**Rozmieszczenie stacji dokujących** (faza przygotowania): algorytm wybrał 4 miejscowości (Przysłup, Terka, Tyskowa, Wetlina), z których drony sięgają **118,8 z 119,2 km** dróg przy ciekach (22 min użytecznego lotu, 12 m/s).
+
+**Model AI (zalana/niezalana droga, FloodNet):** *(do uzupełnienia po treningu: odsetek fałszywie bezpiecznych na zbiorze testowym, czułość, fałszywe alarmy; [`wyniki/metryki_decyzji.json`](wyniki/))*. Metryka FloodNet jest dowodem technicznym, a nie deklaracją gotowości operacyjnej w Polsce (zdjęcia z Teksasu).
 
 ## Co jest prawdziwe, co symulowane, co jest koncepcją
 
 | Element | Status |
 |---|---|
-| Progi alarmowe wodowskazów IMGW (Cisna, Terka, Kalnica) | **prawdziwe** (API IMGW, `dane/imgw/`) |
-| Poziom wody w scenariuszu powodzi | symulowane |
-| Sieć dróg, mosty, wsie doliny Solinki i Wetlinki | **prawdziwe** (OpenStreetMap, `dane/osm/`) |
-| Wybór odcinków krytycznych i plan lotu | **prawdziwy kod** na prawdziwym grafie |
-| Przelot drona i obrazy z przelotu | symulowane (obrazy zastępcze z FloodNet) |
-| Segmentacja zalanych dróg | *(do uzupełnienia: model i metryka na zbiorze testowym FloodNet)* |
-| Portal Wi-Fi ze zgłoszeniami | *(do uzupełnienia)* |
-| Panel sztabu, meldunek, zatwierdzanie, dziennik decyzji | *(do uzupełnienia)* |
-| Stacja dokująca, loty poza zasięgiem wzroku, latający BTS operatora | koncepcja |
+| Sieć dróg, mosty, cieki i wsie doliny Solinki i Wetlinki | **prawdziwe** (OpenStreetMap, `dane/osm/`) |
+| Progi alarmowe wodowskazu Kalnica (Wetlina), wiatr w Lesku | **prawdziwe** (API IMGW, `dane/imgw/`) |
+| Planer (wybór odcinków), status wsi dla klas pojazdów, trasy, meldunki z szablonu | **prawdziwy kod** (`planer/`) |
+| Rozmieszczenie stacji dokujących | **prawdziwy kod**; miejscowości jako przybliżenie lokalizacji remiz OSP |
+| Model segmentacji zalanych dróg i jego metryka | **prawdziwy trening** na FloodNet (`ai/aeropass_trening.ipynb`) |
+| Panel stanowiska kierowania, zatwierdzanie, dziennik decyzji, eksport GeoJSON/KML | **działa** (`panel/`) |
+| Poziom wody ponad progiem, porywy wiatru | symulowane |
+| Które odcinki są zalane lub zerwane (`scenariusz/`) | **symulowane** (prawdopodobieństwa w `planer/scenariusz.py`) |
+| Przelot dronów, obrazy z drona | symulowane (obrazy zastępcze z FloodNet) |
+| Stacje dokujące, loty BVLOS, integracja z systemami PSP | koncepcja |
+
+W danych każdy obiekt ma pole `"symulowane"`, a panel pokazuje, co jest założeniem, a co obserwacją.
 
 ## Jak uruchomić
 
-*(Do uzupełnienia: jedna komenda, np. `python demo.py`.)*
-
-Prototyp planera:
+Wymaga Pythona 3.10+ (sprawdzone na 3.14).
 
 ```bash
-python3 -m venv ~/.venvs/skyroad && source ~/.venvs/skyroad/bin/activate
-pip install networkx
-python planer/krytyczne_odcinki.py
+python3 -m venv ~/.venvs/aeropass && source ~/.venvs/aeropass/bin/activate
+pip install networkx matplotlib
+python panel/serwer.py        # terminal 1 → http://localhost:8765/panel/
+python demo.py --tempo 3      # terminal 2; w panelu kliknij „Zatwierdź start drona”
 ```
 
-## Wyniki
+- `python demo.py --auto` zatwierdza start automatycznie.
+- `python planer/monte_carlo.py 40` przelicza symulację i wykresy (ok. 1 min).
+- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python ai/yolo_to_decision.py`.
 
-*(Do uzupełnienia: metryka FloodNet, wykres porównania strategii lotu, zmierzony zasięg Wi-Fi.)*
+## Jak to działa
 
-## Format danych
+1. **Potrzeba:** stan wody na wodowskazie ≥ stan alarmowy → system weryfikuje zagrożenie i proponuje misję.
+2. **Można latać:** wiatr i porywy według progów (zielone / żółte / czerwone), przestrzeń powietrzna. Start zatwierdza operator.
+3. **Zwiad:** każdy dron w swoim sektorze wybiera odcinek, który leży na najkrótszej możliwej trasie największej liczby wsi o nieustalonym dojeździe, w stosunku do kosztu dolotu. Po każdej obserwacji planuje od nowa.
+4. **Analiza:** model rozpoznaje zalaną lub niezalaną jezdnię; **brak dowodu = „nie wiadomo”, nigdy „przejezdna”**.
+5. **Status wsi** dla wozu ciężkiego i terenowego:
+   - „dostępna”: istnieje trasa wyłącznie po odcinkach sprawdzonych jako przejezdne,
+   - „odcięta”: nie ma trasy nawet przy założeniu, że nieznane odcinki są przejezdne,
+   - „nie wiadomo”: wszystko pomiędzy.
 
-Patrz [FORMAT.md](FORMAT.md).
+   Drogi leśne liczą się tylko dla pojazdu terenowego i tylko po sprawdzeniu.
+6. **Meldunek z szablonu (bez LLM):** fakty, ocena, rekomendacja i termin decyzji, a każde zdanie ma źródło.
+7. **Decyzja:** dyżurny zatwierdza, zmienia albo odrzuca; potem potwierdza wykonanie. Wszystko trafia do dziennika.
+
+Format danych między modułami: [FORMAT.md](FORMAT.md).
+
+## Dual-use
+
+Ta sama warstwa rozpoznania przejezdności tras służy **WOT i wojsku** do planowania konwojów z pomocą i ewakuacji ludności (WOT wspierała ludność podczas powodzi 2024). Zastosowanie jest wyłącznie defensywne i organizacyjne. Eksport GeoJSON/KML pozwala przekazać wynik do innych systemów.
+
+## Ograniczenia (znane)
+
+- Obserwacja w symulacji jest bezbłędna; błąd modelu AI podajemy osobno, a w praktyce każdy meldunek ma zdjęcie do weryfikacji przez człowieka.
+- Parametry lotu (22 min użytecznych, 12 m/s, 3 min wymiany baterii) to założenia dla platformy klasy DJI Matrice 30; trzeba je skalibrować testem.
+- Loty BVLOS wymagają zezwolenia w kategorii szczególnej; propozycja: korytarze wzdłuż rzek zatwierdzone przed sezonem powodziowym.
+- Model trenowany na zdjęciach z Teksasu; potrzebny test na zdjęciach z Polski.
 
 ## Użycie AI i zasobów zewnętrznych
 
-Wymóg regulaminu (IX). Uzupełniać na bieżąco:
+Wymóg regulaminu (IX):
 
-- **Narzędzia AI:** Claude (Anthropic): analiza zadania, koncepcja, dokumentacja, *(części kodu — uzupełnić, które)*.
-- **Biblioteki:** networkx (BSD-3-Clause) *(dopisywać kolejne)*.
+- **Narzędzia AI:** Claude (Anthropic) pomagał w analizie zadania, koncepcji, kodzie (planer, symulacja, demo, panel, notatnik treningu) i dokumentacji. Zespół sprawdzał i uruchamiał kod oraz podejmował decyzje projektowe.
+- **Model:** Ultralytics YOLO11n-seg (AGPL-3.0), douczony na FloodNet.
+- **Biblioteki:**
+  - networkx (BSD-3-Clause), matplotlib (licencja PSF-podobna, matplotlib License),
+  - Leaflet 1.9.4 (BSD-2-Clause, `panel/vendor/leaflet/LICENSE`),
+  - numpy, Pillow, OpenCV, PyTorch (w notatniku treningu).
 - **Dane:**
-  - IMGW-PIB, dane publiczne, © Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy *(dokładną formułę źródła sprawdzić w warunkach IMGW)*.
-  - OpenStreetMap: © OpenStreetMap contributors, licencja ODbL 1.0.
+  - OpenStreetMap: © OpenStreetMap contributors, licencja ODbL 1.0,
+  - IMGW-PIB, dane publiczne: © Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy,
   - FloodNet: CDLA-Permissive 1.0. Rahnemoonfar i in., „FloodNet: A High Resolution Aerial Imagery Dataset for Post Flood Scene Understanding”, IEEE Access 9, 2021, doi:10.1109/ACCESS.2021.3090981.
-
-## Zespół
-
-*(Do uzupełnienia.)*
 
 ## Licencja
 
