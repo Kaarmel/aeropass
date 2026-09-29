@@ -21,13 +21,37 @@
   },
   "odcinki_przy_ciekach": 359,
   "km_przy_ciekach": 119.2,
-  "mediana_min_do_90proc": {
-    "A": 488,
-    "B": 357
-  },
-  "mediana_min_do_100proc": {
-    "A": 536,
-    "B": 391
+  "wyniki": {
+    "4_drony": {
+      "mediana_min_do_90proc": {
+        "A": 150,
+        "B": 91
+      },
+      "mediana_min_do_100proc": {
+        "A": 158,
+        "B": 111
+      },
+      "sredni_proc_wsi_ustalonych_po_60_min": {
+        "A": 68,
+        "B": 75
+      },
+      "wykres": "wyniki/monte_carlo.png"
+    },
+    "1_dron": {
+      "mediana_min_do_90proc": {
+        "A": 608,
+        "B": 357
+      },
+      "mediana_min_do_100proc": {
+        "A": 609,
+        "B": 391
+      },
+      "sredni_proc_wsi_ustalonych_po_60_min": {
+        "A": 4,
+        "B": 11
+      },
+      "wykres": "wyniki/monte_carlo_1dron.png"
+    }
   },
   "symulowane": true
 }

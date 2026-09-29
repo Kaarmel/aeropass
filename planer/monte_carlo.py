@@ -42,6 +42,12 @@ class Swiat:
         self.zagrozone = [o["id"] for o in self.odc if sc.zagrozony(o) and not o["lesny"]]
         self.stacje = self.rozmiesc_stacje()
         self.doki = [p for _, p in self.stacje]
+        # sektor odcinka = najbliższa stacja (środek odcinka); przy wielu dronach każdy pracuje najpierw w swoim sektorze
+        self.sektor = {o: min(range(len(self.doki)), key=lambda i: siec.hav(self._srodek(o), self.doki[i])) for o in self.zagrozone}
+
+    def _srodek(self, oid):
+        g = self.po_id[oid]["geometria"]
+        return tuple(g[len(g) // 2])
 
     def rozmiesc_stacje(self):
         """Zachłanne pokrycie: dokładamy miejscowość, z której w jednym locie tam i z powrotem da się
@@ -91,19 +97,45 @@ def dolot(swiat, poz, oid):
     return (da, b) if da <= db else (db, a)  # (odległość dolotu, punkt wyjścia po przelocie)
 
 
-def symuluj(swiat, prawda, strategia, obserwuj=None, po_kroku=None):
-    """obserwuj(oid) -> stan (domyślnie prawda); po_kroku(t_min, oid, poz, stany, status) — do demo."""
+def symuluj(swiat, prawda, strategia, obserwuj=None, po_kroku=None, drony=1):
+    """Symulacja zdarzeniowa `drony` dronów (dron i startuje ze stacji i mod liczba stacji).
+    obserwuj(oid) -> stan (domyślnie prawda); po_kroku(t_min, oid, poz, stany, status, dron) — do demo.
+    Odcinek, który sprawdza inny dron, nie jest brany pod uwagę; wynik obserwacji jest znany dopiero po przelocie."""
     stany = sc.stan_poczatkowy(swiat.odc)
     st = swiat.status(stany)
     nieznane0 = [w for w, s in st.items() if s == "nieznany"]
     if not nieznane0:
         return [(0.0, 1.0)], 0
-    t, poz, bateria = 0.0, swiat.doki[0], BUDZET_S  # start z pierwszej (najlepiej pokrywającej) stacji
+    D = [{"i": i, "t": 0.0, "poz": swiat.doki[i % len(swiat.doki)], "bat": BUDZET_S, "zad": None} for i in range(drony)]
     krzywa = [(0.0, 0.0)]
     do_sprawdzenia = set(swiat.zagrozone)
-    niewidoczne = set()  # poza zasięgiem stacji: zostają nieznane
-    while do_sprawdzenia:
-        oid = None
+    niewidoczne, w_toku = set(), set()  # poza zasięgiem stacji; właśnie sprawdzane przez inny dron
+    while True:
+        d = min(D, key=lambda x: x["t"])
+        if d["zad"]:  # dron kończy przelot odcinka: wynik obserwacji staje się znany
+            oid, d["poz"] = d["zad"]
+            d["zad"] = None
+            w_toku.discard(oid)
+            stany[oid] = obserwuj(oid) if obserwuj else prawda[oid]
+            st = swiat.status(stany)
+            znane = sum(st[w] != "nieznany" for w in nieznane0) / len(nieznane0)
+            krzywa.append((d["t"] / 60, znane))
+            if po_kroku:
+                po_kroku(d["t"] / 60, oid, d["poz"], stany, st, d["i"])
+            if znane == 1.0:
+                break
+            continue
+        kandydaci = do_sprawdzenia - w_toku
+        if drony > 1:  # najpierw własny sektor (ta sama zasada dla A i B)
+            wlasne = {k for k in kandydaci if swiat.sektor[k] == d["i"] % len(swiat.doki)}
+            kandydaci = wlasne or kandydaci
+        if not kandydaci:
+            zajete = [x["t"] for x in D if x["zad"]]
+            if not zajete:
+                break
+            d["t"] = min(zajete) + 1e-6  # czekaj, aż inny dron skończy
+            continue
+        poz, oid = d["poz"], None
         if strategia == "B":
             # trasy planujemy z pominięciem odcinków, których dron i tak nie sprawdzi
             O = swiat.graf({**stany, **{k: "zablokowany" for k in niewidoczne}}, True)
@@ -115,49 +147,44 @@ def symuluj(swiat, prawda, strategia, obserwuj=None, po_kroku=None):
                     continue
                 for a, b in zip(sc_, sc_[1:]):
                     k = O[a][b]["id"]
-                    if stany.get(k) == "nieznany" and k in do_sprawdzenia:
+                    if stany.get(k) == "nieznany" and k in kandydaci:
                         licznik[k] = licznik.get(k, 0) + 1
             if licznik:
                 oid = max(licznik, key=lambda o: licznik[o] / (dolot(swiat, poz, o)[0] + swiat.po_id[o]["dlugosc_m"] + 1))
         if oid is None:  # A zawsze; B, gdy nic już nie rozstrzyga: najbliższy niesprawdzony
-            oid = min(do_sprawdzenia, key=lambda o: dolot(swiat, poz, o)[0])
+            oid = min(kandydaci, key=lambda o: dolot(swiat, poz, o)[0])
         d_dolot, wyjscie = dolot(swiat, poz, oid)
         przelot = (d_dolot + swiat.po_id[oid]["dlugosc_m"]) / V
         powrot = min(siec.hav(wyjscie, dk) for dk in swiat.doki) / V
-        if przelot + powrot > bateria:
+        if przelot + powrot > d["bat"]:
             # wróć do najbliższej stacji, wymień baterię; jeśli stamtąd odcinek jest za daleko,
             # przeleć do stacji, z której go sięgniesz (kolejna wymiana baterii)
-            dk = min(swiat.doki, key=lambda d: siec.hav(poz, d))
-            t += siec.hav(poz, dk) / V + WYMIANA_S
-            poz, bateria = dk, BUDZET_S
+            dk = min(swiat.doki, key=lambda x: siec.hav(poz, x))
+            d["t"] += siec.hav(poz, dk) / V + WYMIANA_S
+            poz, d["bat"] = dk, BUDZET_S
 
-            def koszt_z(d):
-                dd, wy = dolot(swiat, d, oid)
+            def koszt_z(x):
+                dd, wy = dolot(swiat, x, oid)
                 return (dd + swiat.po_id[oid]["dlugosc_m"]) / V + min(siec.hav(wy, d2) for d2 in swiat.doki) / V
 
-            osiagalne = [d for d in swiat.doki if koszt_z(d) <= BUDZET_S]
+            osiagalne = [x for x in swiat.doki if koszt_z(x) <= BUDZET_S]
             if not osiagalne:  # poza zasięgiem całej sieci stacji
                 do_sprawdzenia.discard(oid)
                 niewidoczne.add(oid)
+                d["poz"] = poz
                 continue
             if koszt_z(poz) > BUDZET_S:
-                cel = min(osiagalne, key=lambda d: siec.hav(poz, d))
-                t += siec.hav(poz, cel) / V + WYMIANA_S
+                cel = min(osiagalne, key=lambda x: siec.hav(poz, x))
+                d["t"] += siec.hav(poz, cel) / V + WYMIANA_S
                 poz = cel
             d_dolot, wyjscie = dolot(swiat, poz, oid)
             przelot = (d_dolot + swiat.po_id[oid]["dlugosc_m"]) / V
-        t += przelot
-        bateria -= przelot
-        poz = wyjscie
-        stany[oid] = obserwuj(oid) if obserwuj else prawda[oid]
+        d["t"] += przelot
+        d["bat"] -= przelot
+        d["poz"] = poz
+        d["zad"] = (oid, wyjscie)
+        w_toku.add(oid)
         do_sprawdzenia.discard(oid)
-        st = swiat.status(stany)
-        znane = sum(st[w] != "nieznany" for w in nieznane0) / len(nieznane0)
-        krzywa.append((t / 60, znane))
-        if po_kroku:
-            po_kroku(t / 60, oid, poz, stany, st)
-        if znane == 1.0:
-            break
     return krzywa, len(nieznane0)
 
 
@@ -170,41 +197,7 @@ def na_siatke(krzywa, minuty):
     return wynik
 
 
-def main(n):
-    swiat = Swiat()
-    minuty = list(range(0, 721, 5))
-    wyniki = {"A": [], "B": []}
-    czasy = {"A": {"90": [], "100": []}, "B": {"90": [], "100": []}}
-    for s in range(n):
-        prawda = sc.losuj_prawde(swiat.odc, random.Random(1000 + s))
-        for strat in ("A", "B"):
-            krzywa, _ = symuluj(swiat, prawda, strat)
-            wyniki[strat].append(na_siatke(krzywa, minuty))
-            for prog in ("90", "100"):
-                t = next((m for m, f in krzywa if f >= int(prog) / 100), None)
-                czasy[strat][prog].append(t)
-        print(f"scenariusz {s + 1}/{n}", end="\r", flush=True)
-
-    def med(xs):
-        xs = sorted(x if x is not None else float("inf") for x in xs)
-        m = xs[len(xs) // 2]
-        return None if m == float("inf") else round(m)
-
-    podsum = {
-        "liczba_scenariuszy": n,
-        "zalozenia": {"predkosc_ms": V, "uzyteczne_min": BUDZET_S / 60, "wymiana_min": WYMIANA_S / 60,
-                      "stacje": [n for n, _ in swiat.stacje], "pokrycie_km": swiat.pokrycie_km, "klasa_pojazdu": "ciezarowy",
-                      "P_ZERWANY_MOST": sc.P_ZERWANY_MOST, "P_ZALANY_PRZY_POTOKU": sc.P_ZALANY_PRZY_POTOKU,
-                      "obserwacja": "bezbłędna (błąd modelu AI raportowany osobno)"},
-        "odcinki_przy_ciekach": len(swiat.zagrozone),
-        "km_przy_ciekach": round(sum(swiat.po_id[o]["dlugosc_m"] for o in swiat.zagrozone) / 1000, 1),
-        "mediana_min_do_90proc": {k: med(v["90"]) for k, v in czasy.items()},
-        "mediana_min_do_100proc": {k: med(v["100"]) for k, v in czasy.items()},
-        "symulowane": True,
-    }
-    Path("wyniki").mkdir(exist_ok=True)
-    json.dump(podsum, open("wyniki/monte_carlo.json", "w"), ensure_ascii=False, indent=2)
-
+def wykres(minuty, wyniki, n, drony, plik):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -217,7 +210,7 @@ def main(n):
         p90 = [100 * sorted(c)[int(0.9 * (len(c) - 1))] for c in kol]
         ax.fill_between(minuty, p10, p90, color=kolor, alpha=0.15, linewidth=0)
         ax.plot(minuty, sr, color=kolor, linewidth=2.2, label=etykieta)
-    ax.set_xlabel(f"Minuty lotu (1 dron, {len(swiat.stacje)} stacje dokujące, wymiany baterii wliczone)")
+    ax.set_xlabel(f"Minuty od startu ({drony} {'dron' if drony == 1 else 'drony'}, {len(STACJE_CACHE)} stacje dokujące, wymiany baterii wliczone)")
     ax.set_ylabel("% wsi z ustalonym dojazdem")
     ax.set_ylim(0, 101)
     ax.set_xlim(0, minuty[-1])
@@ -225,8 +218,54 @@ def main(n):
     ax.legend(loc="lower right", frameon=False)
     ax.set_title(f"Dolina Solinki i Wetlinki: {n} symulowanych powodzi (średnia, pas 10–90%)", fontsize=10)
     fig.tight_layout()
-    fig.savefig("wyniki/monte_carlo.png")
-    print("\n" + json.dumps(podsum, ensure_ascii=False, indent=2))
+    fig.savefig(plik)
+
+
+STACJE_CACHE = []
+
+
+def main(n):
+    swiat = Swiat()
+    STACJE_CACHE[:] = swiat.stacje
+
+    def med(xs):
+        xs = sorted(x if x is not None else float("inf") for x in xs)
+        m = xs[len(xs) // 2]
+        return None if m == float("inf") else round(m)
+
+    podsum = {
+        "liczba_scenariuszy": n,
+        "zalozenia": {"predkosc_ms": V, "uzyteczne_min": BUDZET_S / 60, "wymiana_min": WYMIANA_S / 60,
+                      "stacje": [s for s, _ in swiat.stacje], "pokrycie_km": swiat.pokrycie_km, "klasa_pojazdu": "ciezarowy",
+                      "P_ZERWANY_MOST": sc.P_ZERWANY_MOST, "P_ZALANY_PRZY_POTOKU": sc.P_ZALANY_PRZY_POTOKU,
+                      "obserwacja": "bezbłędna (błąd modelu AI raportowany osobno)"},
+        "odcinki_przy_ciekach": len(swiat.zagrozone),
+        "km_przy_ciekach": round(sum(swiat.po_id[o]["dlugosc_m"] for o in swiat.zagrozone) / 1000, 1),
+        "wyniki": {},
+        "symulowane": True,
+    }
+    Path("wyniki").mkdir(exist_ok=True)
+    for drony, minuty, plik in ((4, list(range(0, 241, 2)), "wyniki/monte_carlo.png"),
+                                (1, list(range(0, 721, 5)), "wyniki/monte_carlo_1dron.png")):
+        wyniki = {"A": [], "B": []}
+        czasy = {"A": {"90": [], "100": []}, "B": {"90": [], "100": []}}
+        for s in range(n):
+            prawda = sc.losuj_prawde(swiat.odc, random.Random(1000 + s))
+            for strat in ("A", "B"):
+                krzywa, _ = symuluj(swiat, prawda, strat, drony=drony)
+                wyniki[strat].append(na_siatke(krzywa, minuty))
+                for prog in ("90", "100"):
+                    czasy[strat][prog].append(next((m for m, f in krzywa if f >= int(prog) / 100), None))
+            print(f"{drony} dron(y): scenariusz {s + 1}/{n}", end="\r", flush=True)
+        podsum["wyniki"][f"{drony}_dron" if drony == 1 else f"{drony}_drony"] = {
+            "mediana_min_do_90proc": {k: med(v["90"]) for k, v in czasy.items()},
+            "mediana_min_do_100proc": {k: med(v["100"]) for k, v in czasy.items()},
+            "sredni_proc_wsi_ustalonych_po_60_min": {k: round(100 * sum(r[minuty.index(60)] for r in v) / len(v)) for k, v in wyniki.items()},
+            "wykres": plik,
+        }
+        wykres(minuty, wyniki, n, drony, plik)
+    json.dump(podsum, open("wyniki/monte_carlo.json", "w"), ensure_ascii=False, indent=2)
+    print("\n" + json.dumps(podsum["wyniki"], ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

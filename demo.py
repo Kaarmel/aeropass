@@ -29,7 +29,8 @@ import scenariusz as sc  # noqa: E402
 import siec  # noqa: E402
 
 START = datetime.fromisoformat("2026-09-30T06:00:00+02:00")
-ZIARNO = 38  # scenariusz demo: 8 wsi odciętych dla wozu ciężkiego, w tym Wetlina; 1 z objazdem leśnym
+ZIARNO = 56  # scenariusz demo: 6 wsi odciętych dla wozu ciężkiego (w tym Wetlina), 2 z objazdem leśnym
+DRONY = 4    # po jednym na stację dokującą
 STAN = Path("stan")
 NIEPRZEJEZDNE = meldunek.NIEPRZEJEZDNE
 
@@ -70,6 +71,7 @@ class Demo:
         self.wsie = {w["id"]: w for w in json.load(open(STAN / "wsie.json", encoding="utf-8"))}
         self.stany = sc.stan_poczatkowy(self.sw.odc)  # wiedza systemu (wszystkie klasy, także leśne)
         self.dyn, self.meldunki, self.zdarzenia = {}, {}, []
+        self.drony = [list(p) for _, p in self.sw.stacje][:DRONY]
         self.status = {w: {"ciezarowy": "nieznany", "terenowy": "nieznany"} for w in self.wsie}
         self.nr_mel, self.t0, self.ostatni_t = itertools.count(1), 0.0, 0.0
         wszystkie_przejezdne = {o["id"]: "przejezdny" for o in self.sw.odc if not o["lesny"]}
@@ -99,11 +101,13 @@ class Demo:
         zapisz("zdarzenia.json", self.zdarzenia[-60:])
         print(f"[{self.zegar(t_min):%H:%M}] {tekst}")
 
-    def misja(self, t_min, etap, poz=None):
+    def misja(self, t_min, etap, poz=None, dron=0):
+        if poz:
+            self.drony[dron] = list(poz)
         ust = sum(s["ciezarowy"] != "nieznany" for s in self.status.values())
         km = sum(self.statyczne[o]["dlugosc_m"] for o, d in self.dyn.items()) / 1000
         zapisz("misja.json", {"czas": self.zegar(t_min).isoformat(timespec="seconds"), "minuta_lotu": round(t_min, 1),
-                              "etap": etap, "dron": {"polozenie": list(poz) if poz else None, "lot": self.lot["id"]},
+                              "etap": etap, "drony": [{"polozenie": p, "stacja": self.sw.stacje[i][0]} for i, p in enumerate(self.drony)], "lot": self.lot["id"],
                               "stacje": [{"nazwa": n, "polozenie": list(p)} for n, p in self.sw.stacje],
                               "alarm": self.alarm, "mozna_latac": self.lot.get("mozna_latac"),
                               "postep": {"wsie_ustalone": ust, "wsie_razem": len(self.wsie), "km_sprawdzone": round(km, 1)},
@@ -119,7 +123,7 @@ class Demo:
     def widok(self, ids):
         return {o: {**self.statyczne[o], **self.dyn.get(o, {"stan": self.stany[o], "czas_obserwacji": None, "zrodlo": None})} for o in ids}
 
-    def po_kroku(self, t_min, oid, poz, stany_ciez, st_ciez):
+    def po_kroku(self, t_min, oid, poz, stany_ciez, st_ciez, dron=0):
         teraz = self.zegar(t_min)
         s = self.stany[oid] = stany_ciez[oid]
         foto = getattr(self, "_foto", None)
@@ -133,7 +137,7 @@ class Demo:
         if s in NIEPRZEJEZDNE and not self.statyczne[oid]["lesny"]:
             self.zdarzenie(t_min, "odcinek", f"{self.statyczne[oid]['droga']} ({oid}): {meldunek.OPIS_STANU[s]}")
         self.odswiez(t_min, st_ciez)
-        self.misja(t_min, "zwiad", poz)
+        self.misja(t_min, "zwiad", poz, dron)
         zapisz("zmiany.json", self.dyn)
         opoznienie = (t_min - self.ostatni_t) * 60 / (self.tempo * 60)
         self.ostatni_t = t_min
@@ -167,7 +171,7 @@ class Demo:
     def czekaj_na_zgode(self):
         self.lot["status"] = "propozycja"
         zapisz("loty.json", [self.lot])
-        self.zdarzenie(0, "lot", "Propozycja lotu lot-001: zwiad dróg przy ciekach, najpierw odcinki rozstrzygające. Czeka na zgodę operatora.")
+        self.zdarzenie(0, "lot", f"Propozycja lotu lot-001: {DRONY} drony, zwiad dróg przy ciekach, najpierw odcinki rozstrzygające. Czeka na zgodę operatora.")
         self.misja(0, "czeka_na_zgode")
         t = time.time()
         while True:
@@ -185,7 +189,7 @@ class Demo:
             sys.exit(0)
         self.lot.update({"status": "w_locie", "zatwierdzil": {"kto": dec[-1]["kto"], "czas": dec[-1]["czas"]}})
         zapisz("loty.json", [self.lot])
-        self.zdarzenie(0, "lot", f"Start zatwierdzony ({dec[-1]['kto']}). Dron startuje ze stacji {self.sw.stacje[0][0]}.")
+        self.zdarzenie(0, "lot", f"Start zatwierdzony ({dec[-1]['kto']}). Startuje {DRONY} dronów ze stacji: {', '.join(n for n, _ in self.sw.stacje[:DRONY])}.")
 
     def objazdy_lesne(self, t_min, poz):
         """Dla wsi odciętych dla wozu ciężkiego: sprawdź najkrótszy możliwy objazd dla terenowego."""
@@ -220,7 +224,7 @@ class Demo:
         self.lot["mozna_latac"] = mozna_latac(self.zegar(0))
         self.zdarzenie(0, "pogoda", f"Można latać: {self.lot['mozna_latac']['poziom'].upper()} — {self.lot['mozna_latac']['powod']}")
         self.czekaj_na_zgode()
-        krzywa, _ = mc.symuluj(self.sw, self.prawda, "B", obserwuj=self.obserwuj, po_kroku=self.po_kroku)
+        krzywa, _ = mc.symuluj(self.sw, self.prawda, "B", obserwuj=self.obserwuj, po_kroku=self.po_kroku, drony=DRONY)
         t_min, poz = krzywa[-1][0], None
         poz = self.sw.doki[0]
         self.zdarzenie(t_min, "lot", "Zwiad dróg zakończony. Sprawdzam objazdy leśne dla wsi odciętych.")

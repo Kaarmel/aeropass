@@ -92,7 +92,7 @@ const STATUS = {dostepna: "✅ dostępna", odcieta: "⛔ odcięta", nieznany: "�
 const WYNIK = {zatwierdzona: "zatwierdzona", odrzucona: "odrzucona", zmieniona: "zmieniona",
                zadysponowano: "zadysponowano", w_drodze: "w drodze", dotarlo: "dotarło", niewykonane: "niewykonane"};
 let stan = {misja: null, wsie: [], meldunki: [], zmiany: {}, decyzje: [], loty: [], zdarzenia: []};
-let wybrany = null, odcinki = {}, warstwyOdc = {}, znacznikiWsi = {}, dron = null, stacje = [];
+let wybrany = null, odcinki = {}, warstwyOdc = {}, znacznikiWsi = {}, drony = [], stacje = [];
 
 // ---------- mapa (wektory z OSM, bez kafelków z internetu) ----------
 const mapa = L.map("mapa", {zoomSnap: 0.25, preferCanvas: true, attributionControl: true}).setView([49.21, 22.40], 11.5);
@@ -155,7 +155,7 @@ function rysujPasek() {
   if (m && m.mozna_latac) { const p = m.mozna_latac; const ik = {zielone: "🟢", zolte: "🟡", czerwone: "🔴"}[p.poziom];
     $("pogoda").innerHTML = `${ik} Można latać: <b>${p.poziom.toUpperCase()}</b> · wiatr ${p.wiatr_ms} m/s, porywy ${p.porywy_ms} m/s`; }
   const lot = stan.loty[0];
-  $("lot").innerHTML = lot ? `🚁 ${lot.id}: <b>${{propozycja: "propozycja — czeka na zgodę", w_locie: "w locie", zakonczony: "zakończony", odrzucony: "odrzucony"}[lot.status] || lot.status}</b>` +
+  $("lot").innerHTML = lot ? `🚁 ${m && m.drony ? m.drony.length + " drony · " : ""}${lot.id}: <b>${{propozycja: "propozycja — czeka na zgodę", w_locie: "w locie", zakonczony: "zakończony", odrzucony: "odrzucony"}[lot.status] || lot.status}</b>` +
     (m ? ` · ${m.etap === "zwiad" ? "zwiad dróg (najpierw odcinki rozstrzygające)" : m.etap}` : "") : "Lot: —";
   $("zgoda").innerHTML = lot && lot.status === "propozycja" && !stan.decyzje.some(d => d.dotyczy === lot.id)
     ? `<button class="tak" onclick="decyzja('${lot.id}','decyzja','zatwierdzona')">Zatwierdź start drona</button> <button class="nie" onclick="decyzja('${lot.id}','decyzja','odrzucona')">Odrzuć</button>` : "";
@@ -185,10 +185,12 @@ function rysujMape() {
   const m = stan.misja;
   if (m && m.stacje && !stacje.length) stacje = m.stacje.map(s => L.marker(s.polozenie, {icon: L.divIcon({html: "🏠", className: "", iconSize: [18, 18]})})
     .addTo(mapa).bindTooltip(`Stacja dokująca: ${s.nazwa} (założenie: remiza OSP)`));
-  if (m && m.dron && m.dron.polozenie) {
-    if (!dron) dron = L.marker(m.dron.polozenie, {icon: L.divIcon({html: "🚁", className: "", iconSize: [22, 22]}), zIndexOffset: 1000}).addTo(mapa).bindTooltip("Dron (symulowany przelot)");
-    dron.setLatLng(m.dron.polozenie);
-  }
+  if (m && m.drony) m.drony.forEach((d, i) => {
+    if (!d.polozenie) return;
+    if (!drony[i]) drony[i] = L.marker(d.polozenie, {icon: L.divIcon({html: "🚁", className: "", iconSize: [22, 22]}), zIndexOffset: 1000})
+      .addTo(mapa).bindTooltip(`Dron ${i + 1} ze stacji ${d.stacja} (symulowany przelot)`);
+    drony[i].setLatLng(d.polozenie);
+  });
 }
 
 function decyzjeDla(id) { return stan.decyzje.filter(d => d.dotyczy === id); }
