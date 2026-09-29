@@ -1,5 +1,11 @@
 """Sprawdza, czy demo nie przedstawia danych scenariusza jako zgody na lot."""
 
+import sys
+from pathlib import Path
+
+KATALOG = Path(__file__).resolve().parent.parent
+sys.path[:0] = [str(KATALOG), str(KATALOG / "symulator")]
+
 from demo import START, alarm, mozna_latac
 
 

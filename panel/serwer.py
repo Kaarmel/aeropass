@@ -1,7 +1,7 @@
 """
 Serwer panelu AeroPass (tylko biblioteka standardowa, działa bez internetu).
 Serwuje katalog repo (panel/, stan/, wyniki/) i przyjmuje decyzje: POST /api/decyzja → dopisanie do stan/decyzje.json.
-Przyciski symulacji: POST /api/sterowanie {akcja: start|reset|pauza|wznow|tempo} uruchamia demo.py jako proces potomny.
+Przyciski symulacji: POST /api/sterowanie {akcja: start|reset|pauza|wznow|tempo} uruchamia symulator/demo.py jako proces potomny.
 Analiza filmu: POST /api/film?nazwa=…&zrodlo=… (plik w treści) → ai/film.py w tle → film/wyniki/<nazwa>/ (panel/film.html).
 
 Uruchomienie z katalogu repo: python panel/serwer.py   →   http://localhost:8765/panel/
@@ -48,7 +48,7 @@ def wyniki_filmow():
 def uruchom_demo(ziarno, strategia, tempo, reczne, przygotuj):
     """Jeden proces demo naraz: nowy start lub reset kończy poprzedni."""
     zatrzymaj_demo()
-    cmd = [sys.executable, "demo.py", "--ziarno", str(ziarno), "--strategia", strategia, "--tempo", str(tempo),
+    cmd = [sys.executable, "symulator/demo.py", "--ziarno", str(ziarno), "--strategia", strategia, "--tempo", str(tempo),
            "--reczne", json.dumps(reczne)] + (["--przygotuj"] if przygotuj else [])
     log = open(KATALOG / "stan" / "demo.log", "w")
     demo.update(proc=subprocess.Popen(cmd, cwd=KATALOG, stdout=log, stderr=subprocess.STDOUT),

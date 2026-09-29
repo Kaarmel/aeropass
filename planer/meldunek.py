@@ -1,6 +1,6 @@
 """
 Meldunek z szablonu (bez LLM): każda informacja pochodzi z obiektów wymienionych w polu "zrodla".
-Struktura według FORMAT.md v2: fakty → ocena → rekomendacja → termin decyzji (zgłoszenia mieszkańców
+Struktura według docs/FORMAT.md v2: fakty → ocena → rekomendacja → termin decyzji (zgłoszenia mieszkańców
 są poza zakresem AeroPass, więc "zgloszenia" = null).
 """
 from datetime import datetime, timedelta

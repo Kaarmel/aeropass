@@ -1,5 +1,11 @@
 """Wynik kamery pochodzi z porównania opisów scen, a nie z detektora dronowego."""
 
+import sys
+from pathlib import Path
+
+KATALOG = Path(__file__).resolve().parent.parent
+sys.path[:0] = [str(KATALOG), str(KATALOG / "symulator")]
+
 from ai.kamera import OPISY, decyzja
 
 

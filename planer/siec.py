@@ -1,7 +1,7 @@
 """
 Sieć dróg doliny z OSM → odcinki (droga między skrzyżowaniami) + status wsi.
 
-Status wsi dla danej klasy pojazdu (FORMAT.md):
+Status wsi dla danej klasy pojazdu (docs/FORMAT.md):
 - "dostepna": istnieje dojazd z zewnątrz wyłącznie po odcinkach o znanym stanie "przejezdny",
 - "odcieta": nie ma dojazdu nawet przy założeniu, że każdy odcinek o nieznanym stanie jest przejezdny,
 - "nieznany": wszystko pomiędzy (brak dowodu to nie „bezpiecznie”).

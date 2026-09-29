@@ -49,7 +49,7 @@ Szczegóły i założenia: [`wyniki/monte_carlo.json`](wyniki/monte_carlo.json),
 | Progi alarmowe wodowskazu Kalnica (Wetlina), wiatr w Lesku | **prawdziwe** (API IMGW, `dane/imgw/`) |
 | Planer (wybór odcinków), status wsi dla klas pojazdów, trasy, meldunki z szablonu | **prawdziwy kod** (`planer/`) |
 | Rozmieszczenie stacji dokujących | **prawdziwy kod**; miejscowości jako przybliżenie lokalizacji remiz OSP |
-| Model segmentacji zalanych dróg i jego metryka | **prawdziwy trening** na FloodNet (`ai/aeropass_trening.ipynb`) |
+| Model segmentacji zalanych dróg i jego metryka | **prawdziwy trening** na FloodNet (`ai/trening/aeropass_trening.ipynb`) |
 | 1500 zdjęć lotniczych LADI v2 | **prawdziwa biblioteka referencyjna**, bez treningu i bez wpływu na wyniki modelu (`dane/ladi/`) |
 | Panel stanowiska kierowania, zatwierdzanie, dziennik decyzji, eksport GeoJSON/KML | **działa** (`panel/`) |
 | Przyciski symulacji w panelu, analiza filmu z poligonami YOLO | **działa** (`panel/`, `ai/film.py`); film dostarcza użytkownik |
@@ -79,16 +79,16 @@ W panelu, na pasku **Symulacja**:
 
 Kafelek „min do ustalenia 50% / 90% wsi” służy do porównania strategii na tym samym scenariuszu. AeroPass szybciej ustala dojazd do 90% wsi w każdej z 40 powodzi z wykresu i w 35 z kolejnych 40 losowań (scenariusze 1–40). Scenariusz 56 jest wyjątkiem: połowę wsi ustala w 30 zamiast 61 min, ale 90% o 10 min później. Do porównania na żywo lepsze są np. scenariusze 7 i 21.
 
-- Bez panelu: `python demo.py --tempo 3 [--auto] [--ziarno 56] [--strategia A|B]`.
+- Bez panelu: `python symulator/demo.py --tempo 3 [--auto] [--ziarno 56] [--strategia A|B]`.
 - `python planer/monte_carlo.py 40` przelicza symulację i wykresy (ok. 1 min).
-- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python test_demo_inputs.py`, `python test_monte_carlo_determinism.py`, `python test_kamera.py`, `python ai/film.py --test`.
-- Integralność zdjęć LADI v2: `python ai/import_ladi.py --check`.
+- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python testy/test_demo_inputs.py`, `python testy/test_monte_carlo_determinism.py`, `python testy/test_kamera.py`, `python ai/film.py --test`.
+- Integralność zdjęć LADI v2: `python dane/ladi/import_ladi.py --check`.
 
 ### Analiza filmu z drona (offline, po locie)
 
 W panelu kliknij **Analiza filmu z drona ↗** (albo otwórz http://localhost:8765/panel/film.html). Wybierz film, wpisz jego źródło i licencję, potem **Wgraj i analizuj**. Z terminala: `python ai/film.py film.mp4 --zrodlo "autor, link, licencja"`.
 
-- Każda klatka przechodzi przez model YOLO11n-seg (`wyniki/best.pt`). Na filmie pojawiają się poligony: zalana droga, sucha droga, zalany budynek.
+- Każda klatka przechodzi przez model YOLO11n-seg (`ai/model/best.pt`). Na filmie pojawiają się poligony: zalana droga, sucha droga, zalany budynek.
 - Pasek u góry filmu to ocena odcinka z ostatniej sekundy. Zalanie wygrywa już przy ¼ klatek, przejezdność wymaga większości, a brak dowodu to „nie wiadomo”.
 - Wynik trafia do `film/wyniki/<nazwa>/`: film MP4 (H.264), 4 kadry PNG do slajdów, `podsumowanie.json` z szybkością przetwarzania.
 - Katalog `film/` jest poza gitem; filmy z internetu mają własne licencje.
@@ -104,7 +104,7 @@ pip install "transformers[torch]" pillow
 python ai/kamera.py
 ```
 
-Otwórz **http://localhost:8767/** i kliknij „Włącz kamerę” albo wybierz zdjęcie. Lokalny serwer analizuje klatkę co około 1,5 s. Klatki nie są zapisywane. Wynik CLIP to względne dopasowanie do opisów, nie prawdopodobieństwo zalania ani potwierdzenie przejezdności. Wytrenowany na ujęciach z drona model YOLO (`wyniki/best.pt`) i jego wcześniejsze predykcje na FloodNet pozostają w repo; nie są używane do klasyfikacji obrazu z kamerki.
+Otwórz **http://localhost:8767/** i kliknij „Włącz kamerę” albo wybierz zdjęcie. Lokalny serwer analizuje klatkę co około 1,5 s. Klatki nie są zapisywane. Wynik CLIP to względne dopasowanie do opisów, nie prawdopodobieństwo zalania ani potwierdzenie przejezdności. Wytrenowany na ujęciach z drona model YOLO (`ai/model/best.pt`) i jego wcześniejsze predykcje na FloodNet pozostają w repo; nie są używane do klasyfikacji obrazu z kamerki.
 
 ## Jak to działa
 
@@ -121,7 +121,7 @@ Otwórz **http://localhost:8767/** i kliknij „Włącz kamerę” albo wybierz 
 6. **Meldunek z szablonu (bez LLM):** fakty, ocena, rekomendacja i termin decyzji, a każde zdanie ma źródło.
 7. **Decyzja:** dyżurny zatwierdza, zmienia albo odrzuca; potem potwierdza wykonanie. Wszystko trafia do dziennika.
 
-Format danych między modułami: [FORMAT.md](FORMAT.md).
+Format danych między modułami: [docs/FORMAT.md](docs/FORMAT.md).
 
 ## Dual-use
 
@@ -143,7 +143,7 @@ Wymóg regulaminu (IX):
 
 - **Narzędzia AI:**
   - Claude (Anthropic) pomagał w analizie zadania, koncepcji, kodzie (planer, symulacja, demo, panel, notatnik treningu) i dokumentacji.
-  - Codex (OpenAI) pomagał w kodzie i dokumentacji, m.in. przy imporcie zdjęć LADI v2 (`ai/import_ladi.py`).
+  - Codex (OpenAI) pomagał w kodzie i dokumentacji, m.in. przy imporcie zdjęć LADI v2 (`dane/ladi/import_ladi.py`).
   - Zespół sprawdzał i uruchamiał kod oraz podejmował decyzje projektowe.
 - **Modele:** Ultralytics YOLO11n-seg (AGPL-3.0), douczony na FloodNet; OpenAI CLIP ViT-B/32 używany tylko w pokazie z kamerki.
 - **Biblioteki:**

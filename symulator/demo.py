@@ -5,12 +5,12 @@ alarm IMGW → „można latać” → propozycja lotu → zgoda operatora (w pa
 sprawdzenie objazdów leśnych dla odciętych wsi → decyzje w panelu.
 
 Prawdziwe: sieć dróg i wsie (OSM), progi alarmowe wodowskazów i wiatr (IMGW), logika planera i meldunków.
-Symulowane: poziom wody ponad progiem, porywy wiatru, przelot drona, stan odcinków (scenariusz/prawda),
+Symulowane: poziom wody ponad progiem, porywy wiatru, przelot drona, stan odcinków (stan/prawda.json),
 obrazy z drona (zastępcze zdjęcia z FloodNet, jeśli są wyniki modelu).
 
 Uruchomienie z katalogu repo:
     python panel/serwer.py            # w osobnym terminalu, panel: http://localhost:8765/panel/
-    python demo.py [--tempo 3] [--auto] [--ziarno 56] [--strategia B]
+    python symulator/demo.py [--tempo 3] [--auto] [--ziarno 56] [--strategia B]
 --tempo: ile minut symulacji na sekundę; --auto: start drona zatwierdzany automatycznie po 3 s;
 --ziarno: losowanie powodzi; --strategia: B = najpierw odcinki rozstrzygające, A = przegląd wszystkich dróg przy ciekach;
 --reczne: JSON {id_odcinka: stan} nadpisujący wylosowaną prawdę; --przygotuj: tylko zapisz stan początkowy.
@@ -25,7 +25,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / "planer"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "planer"))
 import meldunek  # noqa: E402
 import monte_carlo as mc  # noqa: E402
 import scenariusz as sc  # noqa: E402
@@ -263,7 +263,7 @@ class Demo:
         ciez = [s["ciezarowy"] for s in self.status.values()]
         self.zdarzenie(t_min, "koniec", f"Koniec misji po {t_min:.0f} min lotu: {ciez.count('dostepna')} wsi dostępnych, {ciez.count('odcieta')} odciętych dla wozu ciężkiego, {ciez.count('nieznany')} nieustalonych.")
         self.misja(t_min, "koniec", poz)
-        # pełny plik w formacie FORMAT.md na koniec
+        # pełny plik w formacie docs/FORMAT.md na koniec
         zapisz("odcinki.json", [{**o, **self.dyn.get(o["id"], {})} for o in self.statyczne.values()])
 
 

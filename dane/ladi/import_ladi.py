@@ -1,8 +1,8 @@
 """Pobierz 1500 zdjęć referencyjnych LADI v2 (bez treningu modelu).
 
     pip install pyarrow pillow
-    python ai/import_ladi.py
-    python ai/import_ladi.py --check
+    python dane/ladi/import_ladi.py
+    python dane/ladi/import_ladi.py --check
 """
 
 import argparse
@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DEST = ROOT / "dane" / "ladi"
 REVISION = "5f2dbfe8c466d32edafd1bab847ec5252309acdb"
 BASE = f"https://huggingface.co/datasets/MITLL/LADI-v2-dataset/resolve/{REVISION}/data"

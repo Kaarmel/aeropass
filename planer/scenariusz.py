@@ -1,5 +1,5 @@
 """
-Generator scenariusza demo: stan/wsie.json, stan/odcinki.json (FORMAT.md) + scenariusz/prawda.json.
+Generator scenariusza demo: stan/wsie.json, stan/odcinki.json (FORMAT.md) + symulator/scenariusz/prawda.json.
 
 Prawdziwe: sieć dróg, mosty, cieki i wsie doliny Solinki i Wetlinki (OSM), progi IMGW.
 SYMULOWANE: które odcinki są zalane lub zerwane (prawda.json) — losowane z prawdopodobieństw niżej.
@@ -53,7 +53,7 @@ def stan_poczatkowy(odcinki):
     return {o["id"]: "przejezdny" if (not zagrozony(o) and not o["lesny"]) else "nieznany" for o in odcinki}
 
 
-def zapisz(ziarno=7, plik_prawdy="scenariusz/prawda.json"):
+def zapisz(ziarno=7, plik_prawdy="symulator/scenariusz/prawda.json"):
     odcinki, wsie, G, wz = wczytaj()
     prawda = losuj_prawde(odcinki, random.Random(ziarno))
     stany = stan_poczatkowy(odcinki)

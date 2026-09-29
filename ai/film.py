@@ -1,5 +1,5 @@
 """
-Analiza filmu z drona po locie (offline): YOLO11n-seg (wyniki/best.pt, FloodNet) na każdej klatce,
+Analiza filmu z drona po locie (offline): YOLO11n-seg (ai/model/best.pt, FloodNet) na każdej klatce,
 poligony zalanych i suchych dróg, pasek oceny odcinka i kilka kadrów PNG do prezentacji.
 
     python ai/film.py film.mp4 --zrodlo "autor, link, licencja"   →   film/wyniki/<nazwa>/
@@ -18,7 +18,7 @@ from collections import Counter, deque
 from pathlib import Path
 
 KATALOG = Path(__file__).resolve().parent.parent
-MODEL = KATALOG / "wyniki" / "best.pt"
+MODEL = KATALOG / "ai" / "model" / "best.pt"
 PROG_ZALANY, PROG_SUCHY = 0.4, 0.5  # jak w notatniku treningu (metryka decyzji)
 KLASY = {"flooded_road": ("zalana droga", (235, 99, 37)),      # BGR, kolory jak w panelu
          "road_non_flooded": ("sucha droga", (61, 128, 21)),
@@ -179,7 +179,7 @@ def analizuj(wejscie, wyjscie, zrodlo=""):
         "czas_przetwarzania_s": round(czas, 1), "fps_przetwarzania": round(i / czas, 1) if czas else None,
         "udzial_klatek": {s: round(oceny[s] / i, 3) if i else 0 for s in OCENA},
         "ocena_na_sekunde": na_sekunde,
-        "model": "YOLO11n-seg douczony na FloodNet (wyniki/best.pt), imgsz 640, conf 0.25",
+        "model": "YOLO11n-seg douczony na FloodNet (ai/model/best.pt), imgsz 640, conf 0.25",
         "progi": {"zalany": PROG_ZALANY, "suchy": PROG_SUCHY, "okno_klatek": okno.maxlen, "zalanie_od_klatek": k},
         "uwaga": "analiza offline; wynik niezweryfikowany na tym nagraniu; ocena odcinka to wygładzona ocena klatek z ostatniej sekundy",
     }
