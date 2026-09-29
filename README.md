@@ -37,6 +37,10 @@ Szczegóły i założenia: [`wyniki/monte_carlo.json`](wyniki/monte_carlo.json),
 - Jakość samych masek zalanej drogi na poziomie pikseli jest słaba (mAP50-95 = 0,05, [`wyniki/metryki.json`](wyniki/metryki.json)), więc decyzję podejmujemy na poziomie zdjęcia, a nie obrysu wody.
 - Metryka FloodNet jest dowodem technicznym, a nie deklaracją gotowości operacyjnej w Polsce (zdjęcia z Teksasu).
 
+**Dodatkowa biblioteka źródłowa:** 1500 zdjęć lotniczych z [LADI v2](https://huggingface.co/datasets/MITLL/LADI-v2-dataset), pomniejszonych do 640 px: [`dane/ladi/obrazy/`](dane/ladi/obrazy/), [manifest z etykietami i sumami SHA-256](dane/ladi/manifest.csv), [źródło i licencja CC BY 4.0](dane/ladi/README.md). 1143 obrazy mają etykietę obecności drogi, a 161 etykietę obecności zalania. Dodano je do przeglądania, **bez nowego treningu ani oceny modelu**. Etykiety mówią o obecności drogi i zalania na zdjęciu osobno, nie o przejezdności odcinka.
+
+![Przykładowe ujęcie lotnicze LADI v2: droga w sąsiedztwie wody](dane/ladi/obrazy/test-08-016.jpg)
+
 ## Co jest prawdziwe, co symulowane, co jest koncepcją
 
 | Element | Status |
@@ -46,6 +50,7 @@ Szczegóły i założenia: [`wyniki/monte_carlo.json`](wyniki/monte_carlo.json),
 | Planer (wybór odcinków), status wsi dla klas pojazdów, trasy, meldunki z szablonu | **prawdziwy kod** (`planer/`) |
 | Rozmieszczenie stacji dokujących | **prawdziwy kod**; miejscowości jako przybliżenie lokalizacji remiz OSP |
 | Model segmentacji zalanych dróg i jego metryka | **prawdziwy trening** na FloodNet (`ai/aeropass_trening.ipynb`) |
+| 1500 zdjęć lotniczych LADI v2 | **prawdziwa biblioteka referencyjna**, bez treningu i bez wpływu na wyniki modelu (`dane/ladi/`) |
 | Panel stanowiska kierowania, zatwierdzanie, dziennik decyzji, eksport GeoJSON/KML | **działa** (`panel/`) |
 | Poziom wody ponad progiem, porywy wiatru | symulowane |
 | Które odcinki są zalane lub zerwane (`scenariusz/`) | **symulowane** (prawdopodobieństwa w `planer/scenariusz.py`) |
@@ -68,6 +73,7 @@ python demo.py --tempo 3      # terminal 2; w panelu kliknij „Zatwierdź start
 - `python demo.py --auto` zatwierdza start automatycznie.
 - `python planer/monte_carlo.py 40` przelicza symulację i wykresy (ok. 1 min).
 - Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python test_demo_inputs.py`, `python test_monte_carlo_determinism.py`, `python test_kamera.py`.
+- Integralność zdjęć LADI v2: `python ai/import_ladi.py --check`.
 
 ### Model na kamerce (proof of concept)
 
@@ -125,6 +131,7 @@ Wymóg regulaminu (IX):
   - OpenStreetMap: © OpenStreetMap contributors, licencja ODbL 1.0,
   - IMGW-PIB, dane publiczne: © Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy,
   - FloodNet: CDLA-Permissive 1.0. Rahnemoonfar i in., „FloodNet: A High Resolution Aerial Imagery Dataset for Post Flood Scene Understanding”, IEEE Access 9, 2021, doi:10.1109/ACCESS.2021.3090981.
+  - LADI v2: CC BY 4.0. Scheele, Picchione, Liu, „LADI v2: Multi-label Dataset and Classifiers for Low-Altitude Disaster Imagery”, 2024, arXiv:2406.02780. Szczegóły i zmiany w [`dane/ladi/README.md`](dane/ladi/README.md).
 
 ## Licencja
 

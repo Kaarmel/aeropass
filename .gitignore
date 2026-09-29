@@ -4,4 +4,4 @@ __pycache__/
 *.zip
 *.tmp
 stan/
-obrazy/
+/obrazy/
