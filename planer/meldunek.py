@@ -16,6 +16,10 @@ def _min_temu(teraz, czas_iso):
     return max(0, round((teraz - datetime.fromisoformat(czas_iso)).total_seconds() / 60))
 
 
+def temu(m):
+    return "przed chwilą" if not m else f"{m} min temu"
+
+
 def opis_trasy(odcinki_trasy, po_id):
     drogi = list(dict.fromkeys(po_id[o]["droga"] for o in odcinki_trasy))  # kolejność przejazdu, bez powtórzeń
     km = sum(po_id[o]["dlugosc_m"] for o in odcinki_trasy) / 1000
@@ -38,7 +42,7 @@ def zbuduj(wies, status, trasy, przyczyny, po_id, teraz, nr):
         poziom, srodek = "informacyjne", "droga"
         opis, km = opis_trasy(trasy["ciezarowy"], po_id)
         stare = max((_min_temu(teraz, po_id[o]["czas_obserwacji"]) or 0) for o in trasy["ciezarowy"]) if trasy["ciezarowy"] else 0
-        dzialanie = f"Dojazd wozem ciężkim: {opis}, ok. {km} km. Najstarsza obserwacja odcinka zagrożonego na trasie: {stare} min temu."
+        dzialanie = f"Dojazd wozem ciężkim: {opis}, ok. {km} km. Najstarsza obserwacja odcinka zagrożonego na trasie: {temu(stare)}."
         zrodla += trasy["ciezarowy"]
         uzasadnienie.append("trasa po odcinkach o znanym stanie „przejezdny”")
     elif ter == "dostepna":
@@ -47,11 +51,11 @@ def zbuduj(wies, status, trasy, przyczyny, po_id, teraz, nr):
         lesne = [o for o in trasy["terenowy"] if po_id[o]["lesny"]]
         zrodla += trasy["terenowy"]
         dzialanie = (f"Wóz ciężki nie dojedzie. Dojazd tylko pojazdem terenowym: {opis}, ok. {km} km"
-                     + (f", w tym droga leśna sprawdzona {min(_min_temu(teraz, po_id[o]['czas_obserwacji']) or 0 for o in lesne)} min temu." if lesne else "."))
+                     + (f", w tym droga leśna sprawdzona {temu(min(_min_temu(teraz, po_id[o]['czas_obserwacji']) or 0 for o in lesne))}." if lesne else "."))
         uzasadnienie += ["brak dojazdu drogą utwardzoną", "objazd leśny zweryfikowany z drona"]
     else:
         poziom, srodek = "pilne", "potwierdzic_najpierw"
-        objazd = "objazd leśny nieprzejezdny" if ter == "odcieta" else "objazd leśny niezweryfikowany"
+        objazd = "brak objazdu dla pojazdów terenowych" if ter == "odcieta" else "objazd leśny niezweryfikowany"
         dzialanie = ("Brak dojazdu drogą dla wozów PSP i OSP. Do decyzji: inny środek (łódź, śmigłowiec, dojście pieszo) "
                      f"po potwierdzeniu dostępności sił; lądowisko niepotwierdzone; {objazd}.")
         uzasadnienie += ["brak dojazdu drogą utwardzoną", objazd]
@@ -66,7 +70,7 @@ def zbuduj(wies, status, trasy, przyczyny, po_id, teraz, nr):
     tekst = (f"{POZIOM_TEKST[poziom]} – {wies['nazwa']}, {teraz:%H:%M}\n"
              f"Status dla wozu ciężkiego: {ocena_txt[ciez]}; dla terenowego: {ocena_txt[ter]}.\n"
              f"Nieprzejezdne na zwykłym dojeździe: {przyczyny_txt}"
-             + (f" (obraz z drona sprzed {min(wiek)} min)" if wiek else "") + ".\n"
+             + (f" (obraz z drona: {temu(min(wiek))})" if wiek else "") + ".\n"
              f"Rekomendacja: {dzialanie}"
              + (f"\nWymagana decyzja do {teraz + timedelta(minutes=termin):%H:%M}." if termin else ""))
     return {
