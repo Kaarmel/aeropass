@@ -24,7 +24,20 @@ Szczegóły i założenia: [`wyniki/monte_carlo.json`](wyniki/monte_carlo.json),
 
 **Rozmieszczenie stacji dokujących** (faza przygotowania): algorytm wybrał 4 miejscowości (Przysłup, Terka, Tyskowa, Wetlina), z których drony sięgają **118,8 z 119,2 km** dróg przy ciekach (22 min użytecznego lotu, 12 m/s).
 
-**Model AI (zalana/niezalana droga, FloodNet):** *(do uzupełnienia po treningu: odsetek fałszywie bezpiecznych na zbiorze testowym, czułość, fałszywe alarmy; [`wyniki/metryki_decyzji.json`](wyniki/))*. Metryka FloodNet jest dowodem technicznym, a nie deklaracją gotowości operacyjnej w Polsce (zdjęcia z Teksasu).
+**Model AI: zalana czy przejezdna** (YOLO11n-seg, 25 epok, FloodNet, oficjalny podział; ocena na **zbiorze testowym** 448 zdjęć, z czego 253 z widoczną jezdnią):
+
+| Decyzja na zdjęciu | Wynik |
+|---|---|
+| **zalana droga uznana za przejezdną (fałszywie bezpieczna)** | **0 z 47** (górna granica 95% ≈ 6%) |
+| zalanie wykryte | 41 z 47 (87%) |
+| zalana → „nie wiadomo” (system nie zgaduje) | 6 z 47 (13%) |
+| sucha droga uznana za zalaną (fałszywy alarm) | 0 z 206 |
+| sucha → „nie wiadomo” | 20 z 206 (10%) |
+
+- Źródło: [`wyniki/metryki_decyzji.json`](wyniki/metryki_decyzji.json).
+- Jednostką jest zdjęcie jako przybliżenie odcinka drogi.
+- Jakość samych masek zalanej drogi na poziomie pikseli jest słaba (mAP50-95 = 0,05, [`wyniki/metryki.json`](wyniki/metryki.json)), więc decyzję podejmujemy na poziomie zdjęcia, a nie obrysu wody.
+- Metryka FloodNet jest dowodem technicznym, a nie deklaracją gotowości operacyjnej w Polsce (zdjęcia z Teksasu).
 
 ## Co jest prawdziwe, co symulowane, co jest koncepcją
 
