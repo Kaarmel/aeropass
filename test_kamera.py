@@ -1,11 +1,12 @@
-"""Najważniejsza reguła kamery: wykryte zalanie ma pierwszeństwo przed suchą drogą."""
+"""Wynik kamery pochodzi z porównania opisów scen, a nie z detektora dronowego."""
 
-from ai.kamera import decyzja
+from ai.kamera import OPISY, decyzja
 
 
-assert decyzja([{"name": "flooded_road", "conf": 0.4},
-                {"name": "road_non_flooded", "conf": 0.9}]) == "zalany"
-assert decyzja([{"name": "flooded_road", "conf": 0.39},
-                {"name": "road_non_flooded", "conf": 0.5}]) == "przejezdny"
-assert decyzja([{"name": "flooded_building", "conf": 0.99}]) == "nieznany"
-print("OK: progi i pierwszeństwo zalania")
+assert decyzja([{"label": OPISY["zalany"], "score": 0.8},
+                {"label": OPISY["suchy"], "score": 0.2}]) == "zalany"
+assert decyzja([{"label": OPISY["suchy"], "score": 0.8},
+                {"label": OPISY["zalany"], "score": 0.2}]) == "suchy"
+assert decyzja([{"label": OPISY["rzeka"], "score": 0.8},
+                {"label": OPISY["zalany"], "score": 0.2}]) == "nieznany"
+print("OK: klasyfikacja sceny z kamerki")

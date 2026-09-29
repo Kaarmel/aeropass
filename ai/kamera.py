@@ -1,38 +1,37 @@
-"""Lokalne demo modelu na klatkach z kamery: python ai/kamera.py."""
+"""Lokalne porównanie scen z kamerki modelem CLIP: python ai/kamera.py."""
 
-import base64
+from io import BytesIO
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-import cv2
-import numpy as np
-from ultralytics import YOLO
+import torch
+from PIL import Image, UnidentifiedImageError
+from transformers import pipeline
 
 
-ROOT = Path(__file__).resolve().parents[1]
-MODEL = ROOT / "wyniki" / "best.pt"
 HTML = Path(__file__).with_suffix(".html")
+MODEL = "openai/clip-vit-base-patch32"
+REVISION = "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268"
+OPISY = {
+    "zalany": "a photo of a street flooded with water",
+    "suchy": "a photo of a dry street with no flooding",
+    "rzeka": "a photo of a river or lake",
+    "wnetrze": "an indoor photo",
+}
 
 
-def decyzja(wykrycia):
-    """Progi z sekcji 7 notatnika treningowego; brak wykrycia = nieznany."""
-    if any(d["name"] == "flooded_road" and d["conf"] >= 0.4 for d in wykrycia):
-        return "zalany"
-    if any(d["name"] == "road_non_flooded" and d["conf"] >= 0.5 for d in wykrycia):
-        return "przejezdny"
-    return "nieznany"
+def decyzja(wyniki):
+    """Wybór najbliższego opisu; pozostałe sceny są poza zakresem pokazu."""
+    najlepszy = max(wyniki, key=lambda w: w["score"])["label"]
+    return {OPISY["zalany"]: "zalany", OPISY["suchy"]: "suchy"}.get(najlepszy, "nieznany")
 
 
-def analizuj(model, klatka):
-    wynik = model.predict(klatka, imgsz=640, conf=0.25, verbose=False)[0]
-    wykrycia = [{"name": model.names[int(c)], "conf": round(float(p), 3)}
-                for c, p in zip(wynik.boxes.cls, wynik.boxes.conf)]
-    ok, obraz = cv2.imencode(".jpg", wynik.plot())
-    if not ok:
-        raise ValueError("nie można zakodować wyniku")
-    return {"stan": decyzja(wykrycia), "wykrycia": wykrycia,
-            "obraz": base64.b64encode(obraz).decode("ascii")}
+def analizuj(model, obraz):
+    wyniki = model(obraz, candidate_labels=list(OPISY.values()))
+    typy = {opis: typ for typ, opis in OPISY.items()}
+    return {"stan": decyzja(wyniki),
+            "wyniki": [{"typ": typy[w["label"]], "score": round(w["score"], 3)} for w in wyniki]}
 
 
 class Obsluga(BaseHTTPRequestHandler):
@@ -68,19 +67,22 @@ class Obsluga(BaseHTTPRequestHandler):
             rozmiar = int(self.headers.get("Content-Length", "0"))
             if self.headers.get("Content-Type") != "image/jpeg" or not 0 < rozmiar <= 5_000_000:
                 raise ValueError("wyślij klatkę JPEG do 5 MB")
-            klatka = cv2.imdecode(np.frombuffer(self.rfile.read(rozmiar), dtype=np.uint8), cv2.IMREAD_COLOR)
-            if klatka is None or max(klatka.shape[:2]) > 2048:
-                raise ValueError("niepoprawna klatka lub obraz większy niż 2048 px")
-            self.odpowiedz(200, analizuj(self.model, klatka))
-        except (ValueError, cv2.error) as e:
+            with Image.open(BytesIO(self.rfile.read(rozmiar))) as plik:
+                if max(plik.size) > 2048:
+                    raise ValueError("obraz większy niż 2048 px")
+                obraz = plik.convert("RGB")
+        except (ValueError, UnidentifiedImageError, OSError) as e:
             self.odpowiedz(400, {"blad": str(e)})
+            return
+        try:
+            self.odpowiedz(200, analizuj(self.model, obraz))
         except Exception as e:
             self.odpowiedz(500, {"blad": f"błąd modelu: {e}"})
 
 
 if __name__ == "__main__":
-    if not MODEL.exists():
-        raise SystemExit(f"Brak modelu: {MODEL}")
-    Obsluga.model = YOLO(str(MODEL))
+    urzadzenie = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Ładuję CLIP na {urzadzenie} (przy pierwszym uruchomieniu pobiera wagi)…", flush=True)
+    Obsluga.model = pipeline("zero-shot-image-classification", model=MODEL, revision=REVISION, device=urzadzenie)
     print("AeroPass kamera: http://localhost:8767/  (Ctrl+C kończy)", flush=True)
     HTTPServer(("127.0.0.1", 8767), Obsluga).serve_forever()

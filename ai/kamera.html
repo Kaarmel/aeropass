@@ -22,8 +22,9 @@
   video, #obraz { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #0b1218; border-radius: 7px; display: block; }
   #obraz { border: 1px solid #34434e; }
   .wynik { margin: 15px 0 6px; font-size: 22px; font-weight: 750; }
-  .wynik.zalany { color: #ff8d85; } .wynik.przejezdny { color: #8ed9c4; } .wynik.nieznany { color: #f2d390; }
-  #wykrycia { color: #bccbd0; font-size: 14px; }
+  .wynik.zalany { color: #ff8d85; } .wynik.suchy { color: #9dc8ed; } .wynik.nieznany { color: #f2d390; }
+  #wyniki { color: #bccbd0; font-size: 14px; }
+  input[type=file] { max-width: 260px; font: inherit; color: #bccbd0; }
   .uwaga { border-left: 3px solid #f2d390; padding-left: 12px; color: #d7dbd4; margin-top: 22px; max-width: 900px; }
   @media (max-width: 760px) { main { padding: 18px; } .siatka { grid-template-columns: 1fr; } }
 </style>
@@ -32,52 +33,73 @@
 <main>
   <div class="tag">AEROPASS / PROOF OF CONCEPT</div>
   <h1>Model wizyjny na żywo</h1>
-  <p class="opis">Kamera pokazuje obraz na żywo. Co około 1,5 sekundy jedna klatka trafia do modelu YOLO uruchomionego lokalnie na tym komputerze. Po prawej zobaczysz maski segmentacji i wykrycia.</p>
+  <p class="opis">Model CLIP porównuje klatkę z opisami zalanej ulicy, suchej ulicy i innych scen. Działa lokalnie na tym komputerze. Możesz użyć kamerki albo wskazać zdjęcie.</p>
   <div class="sterowanie">
     <button id="start">Włącz kamerę</button>
     <button id="stop" disabled>Wyłącz kamerę</button>
+    <input id="plik" type="file" accept="image/*" aria-label="Wybierz zdjęcie do analizy">
     <span id="komunikat" role="status">Kamera wyłączona</span>
   </div>
   <div class="siatka">
     <section class="karta"><h2>Obraz z kamerki</h2><video id="wideo" autoplay muted playsinline></video></section>
-    <section class="karta"><h2>Analiza modelu</h2><img id="obraz" alt="Ostatnia klatka z maskami modelu"><div id="wynik" class="wynik nieznany">Czekam na klatkę</div><div id="wykrycia"></div></section>
+    <section class="karta"><h2>Ostatnia analizowana klatka</h2><img id="obraz" alt="Ostatnia analizowana klatka"><div id="wynik" class="wynik nieznany">Czekam na obraz</div><div id="wyniki"></div></section>
   </div>
-  <p class="uwaga">To pokaz technologii, nie ocena bezpieczeństwa drogi. Model trenowano na zdjęciach z drona w Teksasie; obraz z kamerki jest poza zakresem danych treningowych. Wynik detektora nie jest skalibrowanym prawdopodobieństwem ani potwierdzeniem przejezdności.</p>
+  <p class="uwaga">To pokaz technologii, nie ocena bezpieczeństwa drogi. Model CLIP nie był trenowany ani walidowany dla decyzji o przejezdności. Wyniki to względne dopasowanie do czterech opisów, nie prawdopodobieństwo zalania. Model YOLO trenowany na zdjęciach z drona pozostaje osobno w projekcie.</p>
   <canvas id="klatka" hidden></canvas>
 </main>
 <script>
 const $ = id => document.getElementById(id);
-const nazwy = {flooded_road: "zalana droga", road_non_flooded: "niezalana droga", flooded_building: "zalany budynek"};
-const stany = {zalany: "Wykryta zalana droga", przejezdny: "Wykryta niezalana droga", nieznany: "Brak rozstrzygnięcia"};
+const nazwy = {zalany: "zalana ulica", suchy: "sucha ulica", rzeka: "rzeka lub jezioro", wnetrze: "wnętrze"};
+const stany = {zalany: "Obraz przypomina zalaną ulicę", suchy: "Brak widocznego zalania ulicy", nieznany: "Inny obraz / brak rozstrzygnięcia"};
 let strumien = null, timer = null, zajety = false;
 
-async function analizuj() {
-  if (!strumien || zajety || !$('wideo').videoWidth) return;
+async function wyslij(blob) {
+  if (zajety) return;
   zajety = true;
   try {
-    const wideo = $('wideo'), canvas = $('klatka');
-    canvas.width = Math.min(640, wideo.videoWidth);
-    canvas.height = Math.round(canvas.width * wideo.videoHeight / wideo.videoWidth);
-    canvas.getContext('2d').drawImage(wideo, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .8));
     if (!blob) throw new Error('Nie udało się pobrać klatki');
     const odp = await fetch('/api/analiza', {method: 'POST', headers: {'Content-Type': 'image/jpeg'}, body: blob});
     const dane = await odp.json();
     if (!odp.ok) throw new Error(dane.blad || 'Błąd analizy');
-    if (!strumien) return;
-    $('obraz').src = 'data:image/jpeg;base64,' + dane.obraz;
+    const url = URL.createObjectURL(blob);
+    $('obraz').onload = () => URL.revokeObjectURL(url);
+    $('obraz').src = url;
     $('wynik').textContent = stany[dane.stan] || dane.stan;
     $('wynik').className = 'wynik ' + dane.stan;
-    $('wykrycia').textContent = dane.wykrycia.length
-      ? dane.wykrycia.map(d => `${nazwy[d.name] || d.name}: ${Math.round(d.conf * 100)}% (wynik detektora)`).join(' · ')
-      : 'Model nie wykrył drogi w tej klatce.';
-    $('komunikat').textContent = 'Analiza działa lokalnie';
+    $('wyniki').textContent = 'Względne dopasowanie: ' + dane.wyniki.map(w => `${nazwy[w.typ]} ${Math.round(w.score * 100)}%`).join(' · ');
+    $('komunikat').textContent = 'Analiza zakończona';
   } catch (e) {
     $('komunikat').textContent = e.message;
   } finally {
     zajety = false;
   }
 }
+
+async function analizuj() {
+  if (!strumien || zajety || !$('wideo').videoWidth) return;
+  const wideo = $('wideo'), canvas = $('klatka');
+  canvas.width = Math.min(640, wideo.videoWidth);
+  canvas.height = Math.round(canvas.width * wideo.videoHeight / wideo.videoWidth);
+  canvas.getContext('2d').drawImage(wideo, 0, 0, canvas.width, canvas.height);
+  await wyslij(await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .8)));
+}
+
+$('plik').onchange = async () => {
+  if (strumien) $('stop').onclick();
+  const plik = $('plik').files[0];
+  if (!plik) return;
+  try {
+    const bitmapa = await createImageBitmap(plik), canvas = $('klatka');
+    canvas.width = Math.min(640, bitmapa.width);
+    canvas.height = Math.round(canvas.width * bitmapa.height / bitmapa.width);
+    canvas.getContext('2d').drawImage(bitmapa, 0, 0, canvas.width, canvas.height);
+    bitmapa.close();
+    while (zajety) await new Promise(resolve => setTimeout(resolve, 50));
+    await wyslij(await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .8)));
+  } catch (e) {
+    $('komunikat').textContent = 'Nie udało się odczytać zdjęcia: ' + e.message;
+  }
+};
 
 $('start').onclick = async () => {
   $('start').disabled = true;

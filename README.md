@@ -71,14 +71,14 @@ python demo.py --tempo 3      # terminal 2; w panelu kliknij „Zatwierdź start
 
 ### Model na kamerce (proof of concept)
 
-Model `wyniki/best.pt` jest w repo. W aktywnym środowisku Python:
+Pokaz z kamerki używa [CLIP ViT-B/32](https://huggingface.co/openai/clip-vit-base-patch32) do porównania czterech opisów scen. Przy pierwszym uruchomieniu pobiera wagi modelu do lokalnej pamięci podręcznej. W aktywnym środowisku Python:
 
 ```bash
-pip install ultralytics
+pip install "transformers[torch]" pillow
 python ai/kamera.py
 ```
 
-Otwórz **http://localhost:8767/** i kliknij „Włącz kamerę”; przeglądarka poprosi o dostęp. Lokalny serwer analizuje klatkę co około 1,5 s i pokazuje maski oraz wynik. Klatki nie są zapisywane. To osobny pokaz modelu, bez zmiany stanów dróg w symulacji. Model trenowano na zdjęciach z drona w Teksasie, więc wynik z kamerki nie potwierdza przejezdności drogi.
+Otwórz **http://localhost:8767/** i kliknij „Włącz kamerę” albo wybierz zdjęcie. Lokalny serwer analizuje klatkę co około 1,5 s. Klatki nie są zapisywane. Wynik CLIP to względne dopasowanie do opisów, nie prawdopodobieństwo zalania ani potwierdzenie przejezdności. Wytrenowany na ujęciach z drona model YOLO (`wyniki/best.pt`) i jego wcześniejsze predykcje na FloodNet pozostają w repo; nie są używane do klasyfikacji obrazu z kamerki.
 
 ## Jak to działa
 
@@ -109,17 +109,18 @@ Ta sama warstwa rozpoznania przejezdności tras służy **WOT i wojsku** do plan
 - Parametry lotu (22 min użytecznych, 12 m/s, 3 min wymiany baterii) to założenia dla platformy klasy DJI Matrice 30; trzeba je skalibrować testem.
 - Loty BVLOS wymagają zezwolenia w kategorii szczególnej; propozycja: korytarze wzdłuż rzek zatwierdzone przed sezonem powodziowym.
 - Model trenowany na zdjęciach z Teksasu; potrzebny test na zdjęciach z Polski.
+- Pokaz z kamerki używa CLIP bez douczenia na zalanych ulicach. Sprawdziliśmy kierunek wyniku na 3 zalanych i 3 suchych zdjęciach, w tym na klatce zgłoszonej przez użytkownika; to za mało do oceny skuteczności. Nie używać do decyzji operacyjnych.
 
 ## Użycie AI i zasobów zewnętrznych
 
 Wymóg regulaminu (IX):
 
 - **Narzędzia AI:** Claude (Anthropic) pomagał w analizie zadania, koncepcji, kodzie (planer, symulacja, demo, panel, notatnik treningu) i dokumentacji. Zespół sprawdzał i uruchamiał kod oraz podejmował decyzje projektowe.
-- **Model:** Ultralytics YOLO11n-seg (AGPL-3.0), douczony na FloodNet.
+- **Modele:** Ultralytics YOLO11n-seg (AGPL-3.0), douczony na FloodNet; OpenAI CLIP ViT-B/32 używany tylko w pokazie z kamerki.
 - **Biblioteki:**
   - networkx (BSD-3-Clause), matplotlib (licencja PSF-podobna, matplotlib License),
   - Leaflet 1.9.4 (BSD-2-Clause, `panel/vendor/leaflet/LICENSE`),
-  - numpy, Pillow, OpenCV, PyTorch (w notatniku treningu).
+  - numpy, Pillow, OpenCV, PyTorch (w notatniku treningu); Transformers i PyTorch (pokaz z kamerki).
 - **Dane:**
   - OpenStreetMap: © OpenStreetMap contributors, licencja ODbL 1.0,
   - IMGW-PIB, dane publiczne: © Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy,
