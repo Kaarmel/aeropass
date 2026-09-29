@@ -48,7 +48,7 @@ def alarm():
     return {"zrodlo": f"IMGW hydro {k['id_stacji']} ({k['stacja']}, rzeka {k['rzeka']})",
             "stan_cm": prog + 11, "prog_alarmowy_cm": prog, "prog_ostrzegawczy_cm": int(k["stan_ostrzegawczy"]),
             "stan_rzeczywisty_cm": int(k["stan_wody"]), "pomiar_rzeczywisty": k["stan_wody_data_pomiaru"],
-            "zweryfikowany": True, "uwaga": "progi prawdziwe (IMGW), poziom wody symulowany"}
+            "zweryfikowany": False, "uwaga": "progi prawdziwe (IMGW), poziom wody symulowany; alarm nie jest prawdziwy"}
 
 
 def mozna_latac(czas):
@@ -56,8 +56,8 @@ def mozna_latac(czas):
     w = float(syn["Lesko"]["predkosc_wiatru"])
     porywy = w + 3  # IMGW synop nie podaje porywów: wartość symulowana (docelowo czujnik na stacji)
     poziom = "zielone" if w <= 7 and porywy <= 10 else ("zolte" if w <= 9 and porywy <= 12 else "czerwone")
-    return {"poziom": poziom, "wiatr_ms": w, "porywy_ms": porywy, "opad": False, "przestrzen": "ok",
-            "powod": f"wiatr {w:g} m/s (IMGW Lesko, prawdziwy), porywy {porywy:g} m/s (symulowane), brak stref R",
+    return {"poziom": poziom, "wiatr_ms": w, "porywy_ms": porywy, "opad": None, "przestrzen": "niezweryfikowana",
+            "powod": f"wiatr {w:g} m/s (IMGW Lesko, pomiar {syn['Lesko']['data_pomiaru']} godz. {syn['Lesko']['godzina_pomiaru']}:00), porywy {porywy:g} m/s (symulowane); opad i przestrzeń niezweryfikowane",
             "czas": czas.isoformat(timespec="seconds")}
 
 
@@ -132,7 +132,7 @@ class Demo:
                          "zrodlo": {"typ": "dron", "lot": self.lot["id"],
                                     "obraz": f"wyniki/{foto['plik']}" if foto else None,
                                     "model": {"stan": foto["stan"], "pewnosc": foto["pewnosc"]} if foto else None,
-                                    "uwaga": "obraz zastępczy z FloodNet" if foto else "obserwacja symulowana"},
+                                    "uwaga": "stan ze scenariusza; obraz FloodNet i jego predykcja są osobną ilustracją" if foto else "stan ze scenariusza; obserwacja symulowana"},
                          "symulowane": True}
         if s in NIEPRZEJEZDNE and not self.statyczne[oid]["lesny"]:
             self.zdarzenie(t_min, "odcinek", f"{self.statyczne[oid]['droga']} ({oid}): {meldunek.OPIS_STANU[s]}")
@@ -220,9 +220,9 @@ class Demo:
 
     def uruchom(self):
         self.alarm = alarm()
-        self.zdarzenie(0, "alarm", f"ALARM: {self.alarm['zrodlo']} — {self.alarm['stan_cm']} cm przy progu alarmowym {self.alarm['prog_alarmowy_cm']} cm (poziom symulowany). Zagrożenie zweryfikowane.")
+        self.zdarzenie(0, "alarm", f"SCENARIUSZ ALARMU: {self.alarm['zrodlo']} — {self.alarm['stan_cm']} cm przy progu alarmowym {self.alarm['prog_alarmowy_cm']} cm (poziom symulowany; rzeczywisty zapisany pomiar: {self.alarm['stan_rzeczywisty_cm']} cm).")
         self.lot["mozna_latac"] = mozna_latac(self.zegar(0))
-        self.zdarzenie(0, "pogoda", f"Można latać: {self.lot['mozna_latac']['poziom'].upper()} — {self.lot['mozna_latac']['powod']}")
+        self.zdarzenie(0, "pogoda", f"Ocena pogody w scenariuszu: {self.lot['mozna_latac']['poziom'].upper()} — {self.lot['mozna_latac']['powod']}. To nie jest zgoda na lot.")
         self.czekaj_na_zgode()
         krzywa, _ = mc.symuluj(self.sw, self.prawda, "B", obserwuj=self.obserwuj, po_kroku=self.po_kroku, drony=DRONY)
         t_min, poz = krzywa[-1][0], None

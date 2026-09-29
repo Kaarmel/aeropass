@@ -79,8 +79,8 @@ Wersja 2 (29.09, 15:20). Zmiany względem wersji 1:
   "dron": "dok-cisna-1",
   "typ": "zwiad_drog",
   "status": "zatwierdzony",
-  "alarm": {"zrodlo": "IMGW hydro 149220110 (Kalnica, Wetlina)", "stan_cm": 431, "prog_alarmowy_cm": 420, "zweryfikowany": true},
-  "mozna_latac": {"poziom": "zielone", "wiatr_ms": 5, "porywy_ms": 8, "opad": false, "przestrzen": "ok", "powod": "wiatr w normie, brak stref R", "czas": "2026-09-30T07:55:00+02:00"},
+  "alarm": {"zrodlo": "IMGW hydro 149220110 (Kalnica, Wetlina)", "stan_cm": 431, "prog_alarmowy_cm": 420, "zweryfikowany": false},
+  "mozna_latac": {"poziom": "zielone", "wiatr_ms": 5, "porywy_ms": 8, "opad": null, "przestrzen": "niezweryfikowana", "powod": "ocena pogody w scenariuszu; opad i przestrzeń niezweryfikowane", "czas": "2026-09-30T07:55:00+02:00"},
   "zatwierdzil": {"kto": "operator (demo)", "czas": "2026-09-30T07:58:00+02:00"},
   "plan_odcinki": ["odc-0042", "odc-0043"],
   "plan_zawis": [],
@@ -98,7 +98,7 @@ Wersja 2 (29.09, 15:20). Zmiany względem wersji 1:
   - `"zolte"`: 7–9 m/s albo porywy 10–12 m/s; lot tylko po analizie,
   - `"czerwone"`: powyżej tych progów, burza, marznący opad albo warunki poza instrukcją drona.
   - Lot `"czerwone"` nie może mieć statusu `"zatwierdzony"`.
-- `mozna_latac.przestrzen`: `"ok"` | `"strefa_R"` | `"konflikt"`.
+- `mozna_latac.przestrzen`: `"niezweryfikowana"` w demo; docelowo `"ok"` | `"strefa_R"` | `"konflikt"` po rzeczywistej weryfikacji.
 - `czas_uzyteczny_min`: czas na przelot i zawis po odjęciu rezerwy (18 z 25 min). `czas_planowany_min` nie może go przekroczyć.
 - **Portal w locie `zawis_portal` zamyka przyjmowanie zgłoszeń, gdy dron osiąga próg bezpiecznego powrotu.**
 

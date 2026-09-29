@@ -69,16 +69,16 @@ python demo.py --tempo 3      # terminal 2; w panelu kliknij „Zatwierdź start
 
 - `python demo.py --auto` zatwierdza start automatycznie.
 - `python planer/monte_carlo.py 40` przelicza symulację i wykresy (ok. 1 min).
-- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python ai/yolo_to_decision.py`.
+- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python test_demo_inputs.py`.
 
 ## Jak to działa
 
-1. **Potrzeba:** stan wody na wodowskazie ≥ stan alarmowy → system weryfikuje zagrożenie i proponuje misję.
-2. **Można latać:** wiatr i porywy według progów (zielone / żółte / czerwone), przestrzeń powietrzna. Start zatwierdza operator.
+1. **Potrzeba:** demo podstawia poziom wody ponad prawdziwy próg alarmowy IMGW i proponuje symulowaną misję.
+2. **Warunki lotu w demo:** wiatr z zapisanego pomiaru IMGW i symulowane porywy są porównywane z progami. Opad i przestrzeń powietrzna pozostają niezweryfikowane; ocena pogody nie jest zgodą na rzeczywisty lot. Operator uruchamia tylko symulację.
 3. **Zwiad:** każdy dron w swoim sektorze wybiera odcinek, który leży na najkrótszej możliwej trasie największej liczby wsi o nieustalonym dojeździe, w stosunku do kosztu dolotu. Po każdej obserwacji planuje od nowa.
-4. **Analiza:** model rozpoznaje zalaną lub niezalaną jezdnię; **brak dowodu = „nie wiadomo”, nigdy „przejezdna”**.
+4. **Analiza:** model rozpoznaje zalaną lub niezalaną jezdnię; dla odcinków przy ciekach brak dowodu = „nie wiadomo”. Odcinki z dala od cieków są w symulacji przyjęte jako przejezdne bez obserwacji.
 5. **Status wsi** dla wozu ciężkiego i terenowego:
-   - „dostępna”: istnieje trasa wyłącznie po odcinkach sprawdzonych jako przejezdne,
+   - „dostępna” w symulacji: istnieje trasa po odcinkach obserwowanych jako przejezdne lub przyjętych jako przejezdne z dala od cieków; meldunek wskazuje, ile odcinków opiera się na tym założeniu,
    - „odcięta”: nie ma trasy nawet przy założeniu, że nieznane odcinki są przejezdne,
    - „nie wiadomo”: wszystko pomiędzy.
 
@@ -94,7 +94,8 @@ Ta sama warstwa rozpoznania przejezdności tras służy **WOT i wojsku** do plan
 
 ## Ograniczenia (znane)
 
-- Obserwacja w symulacji jest bezbłędna; błąd modelu AI podajemy osobno, a w praktyce każdy meldunek ma zdjęcie do weryfikacji przez człowieka.
+- Obserwacja w symulacji jest bezbłędna: stan odcinka pochodzi ze scenariusza, a zdjęcie FloodNet tylko ilustruje podobny stan i pokazuje osobną predykcję modelu. Demo nie uruchamia modelu na obrazie tego odcinka; błąd AI raportujemy osobno.
+- Odcinki utwardzone z dala od cieków są w scenariuszu przyjęte jako przejezdne bez obserwacji. Status „dostępna” i czasy Monte Carlo są warunkowe wobec tego założenia; nie potwierdzają bezpiecznego dojazdu w rzeczywistej powodzi.
 - Parametry lotu (22 min użytecznych, 12 m/s, 3 min wymiany baterii) to założenia dla platformy klasy DJI Matrice 30; trzeba je skalibrować testem.
 - Loty BVLOS wymagają zezwolenia w kategorii szczególnej; propozycja: korytarze wzdłuż rzek zatwierdzone przed sezonem powodziowym.
 - Model trenowany na zdjęciach z Teksasu; potrzebny test na zdjęciach z Polski.

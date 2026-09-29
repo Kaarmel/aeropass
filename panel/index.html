@@ -153,7 +153,7 @@ function rysujPasek() {
   $("zegar").textContent = m ? new Date(m.czas).toLocaleTimeString("pl-PL", {hour: "2-digit", minute: "2-digit"}) : "--:--";
   if (m && m.alarm) $("alarm").innerHTML = `🌊 ALARM: ${m.alarm.zrodlo}: <b>${m.alarm.stan_cm} cm</b> (próg ${m.alarm.prog_alarmowy_cm} cm; poziom symulowany)`;
   if (m && m.mozna_latac) { const p = m.mozna_latac; const ik = {zielone: "🟢", zolte: "🟡", czerwone: "🔴"}[p.poziom];
-    $("pogoda").innerHTML = `${ik} Można latać: <b>${p.poziom.toUpperCase()}</b> · wiatr ${p.wiatr_ms} m/s, porywy ${p.porywy_ms} m/s`; }
+    $("pogoda").innerHTML = `${ik} Pogoda w scenariuszu: <b>${p.poziom.toUpperCase()}</b> · wiatr ${p.wiatr_ms} m/s, porywy ${p.porywy_ms} m/s · ⚠️ przestrzeń niezweryfikowana`; }
   const lot = stan.loty[0];
   $("lot").innerHTML = lot ? `🚁 ${m && m.drony ? m.drony.length + " drony · " : ""}${lot.id}: <b>${{propozycja: "propozycja — czeka na zgodę", w_locie: "w locie", zakonczony: "zakończony", odrzucony: "odrzucony"}[lot.status] || lot.status}</b>` +
     (m ? ` · ${m.etap === "zwiad" ? "zwiad dróg (najpierw odcinki rozstrzygające)" : m.etap}` : "") : "Lot: —";
@@ -229,7 +229,7 @@ function pokaz(id, cicho) {
   const foto = m.fakty.odcinki.map(f => f.obraz).find(Boolean);
   $("szczegoly").style.display = "block";
   $("szczegoly").innerHTML = `<b>${m.id}</b> · źródła: ${m.zrodla.slice(0, 8).join(", ")}${m.zrodla.length > 8 ? "…" : ""}\n\n${m.tekst}\n\nUzasadnienie: ${m.rekomendacja.uzasadnienie.join("; ")}` +
-    (foto ? `<img src="../${foto}" alt="obraz z drona (zastępczy FloodNet)"><div class="stat">Obraz zastępczy z FloodNet z predykcją modelu (demo)</div>` : "");
+    (foto ? `<img src="../${foto}" alt="przykładowy obraz FloodNet"><div class="stat">Przykładowa predykcja modelu na obrazie FloodNet. Stan odcinka w demo pochodzi ze scenariusza.</div>` : "");
   if (nowy && !cicho) {
     const w = stan.wsie.find(x => x.id === m.wies);
     if (w) mapa.flyTo(w.polozenie, 13, {duration: .6});
