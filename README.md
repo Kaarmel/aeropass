@@ -1,7 +1,7 @@
 # AeroPass
 
 **Autonomiczny zwiad dronowy przejezdności dróg i zalania ulic dla PSP i OSP.**
-Po alarmie powodziowym drony same sprawdzają najpierw te odcinki dróg, od których zależy dojazd do wsi. Stanowisko kierowania dostaje odpowiedź: *którędy i jakim pojazdem dojedziemy do każdej miejscowości*, ze źródłem, wiekiem i pewnością informacji. Decyzję podejmuje człowiek.
+Po alarmie powodziowym drony same sprawdzają najpierw te odcinki dróg, od których zależy dojazd do wsi. Stanowisko kierowania dostaje odpowiedź: *którędy i jakim pojazdem dojedziemy do każdej miejscowości*, ze źródłem, wiekiem i oznaczeniem niepewności. Decyzję podejmuje człowiek.
 
 Projekt na Dual Use Hackathon 2026 (Carpathian Drone Summit, Jasionka). Scenariusz demo: **dolina Solinki i Wetlinki (Bieszczady)**.
 
@@ -93,6 +93,7 @@ Ta sama warstwa rozpoznania przejezdności tras służy **WOT i wojsku** do plan
 ## Ograniczenia (znane)
 
 - Obserwacja w symulacji jest bezbłędna: stan odcinka pochodzi ze scenariusza, a zdjęcie FloodNet tylko ilustruje podobny stan i pokazuje osobną predykcję modelu. Demo nie uruchamia modelu na obrazie tego odcinka; błąd AI raportujemy osobno.
+- Pewność statusu drogi i wsi nie jest kalibrowana; pole `pewnosc` ma w demo wartość `null`, zamiast arbitralnej liczby. Panel pokazuje „nieoszacowana”.
 - Odcinki utwardzone z dala od cieków są w scenariuszu przyjęte jako przejezdne bez obserwacji. Status „dostępna” i czasy Monte Carlo są warunkowe wobec tego założenia; nie potwierdzają bezpiecznego dojazdu w rzeczywistej powodzi.
 - Parametry lotu (22 min użytecznych, 12 m/s, 3 min wymiany baterii) to założenia dla platformy klasy DJI Matrice 30; trzeba je skalibrować testem.
 - Loty BVLOS wymagają zezwolenia w kategorii szczególnej; propozycja: korytarze wzdłuż rzek zatwierdzone przed sezonem powodziowym.

@@ -228,7 +228,7 @@ function pokaz(id, cicho) {
   const nowy = wybrany !== id; wybrany = id;
   const foto = m.fakty.odcinki.map(f => f.obraz).find(Boolean);
   $("szczegoly").style.display = "block";
-  $("szczegoly").innerHTML = `<b>${m.id}</b> · źródła: ${m.zrodla.slice(0, 8).join(", ")}${m.zrodla.length > 8 ? "…" : ""}\n\n${m.tekst}\n\nUzasadnienie: ${m.rekomendacja.uzasadnienie.join("; ")}` +
+  $("szczegoly").innerHTML = `<b>${m.id}</b> · źródła: ${m.zrodla.slice(0, 8).join(", ")}${m.zrodla.length > 8 ? "…" : ""}\n\n${m.tekst}\n\nPewność oceny: ${m.ocena.pewnosc == null ? "nieoszacowana (symulacja)" : Math.round(m.ocena.pewnosc * 100) + "%"}\nUzasadnienie: ${m.rekomendacja.uzasadnienie.join("; ")}` +
     (foto ? `<img src="../${foto}" alt="przykładowy obraz FloodNet"><div class="stat">Przykładowa predykcja modelu na obrazie FloodNet. Stan odcinka w demo pochodzi ze scenariusza.</div>` : "");
   if (nowy && !cicho) {
     const w = stan.wsie.find(x => x.id === m.wies);

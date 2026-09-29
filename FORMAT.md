@@ -17,7 +17,7 @@ Wersja 2 (29.09, 15:20). Zmiany względem wersji 1:
 - **Czas:** ISO 8601 ze strefą czasową, np. `"2026-09-30T08:15:00+02:00"`.
 - **Identyfikatory:** tekstowe z przedrostkiem: `wies-`, `odc-`, `lot-`, `zgl-`, `mel-`, `dec-`.
 - **Każdy obiekt ma pole `"symulowane": true/false`.** Panel na jego podstawie oznacza, co jest prawdziwe, a co symulowane. To nasza uczciwość wobec jury zapisana w danych.
-- Pewność zawsze w skali od 0 do 1. Stany i statusy to wyłącznie wartości z list poniżej.
+- Pewność jest w skali od 0 do 1 tylko wtedy, gdy została zmierzona i skalibrowana; w demo ma wartość `null` (nieoszacowana). Stany i statusy to wyłącznie wartości z list poniżej.
 - **„Nie wiadomo” to osobny stan, nigdy domyślnie „bezpiecznie”.** Brak obserwacji oznacza `"nieznany"`.
 
 ## wies
@@ -30,7 +30,7 @@ Wersja 2 (29.09, 15:20). Zmiany względem wersji 1:
   "mieszkancy_rejestr": 307,
   "mieszkancy_zrodlo": "OSM",
   "status": "odcieta",
-  "status_pewnosc": 0.8,
+  "status_pewnosc": null,
   "status_czas": "2026-09-30T08:15:00+02:00",
   "dojazd": {"osobowy": false, "ciezarowy": false, "terenowy": true},
   "ladowisko": {"polozenie": [49.1471, 22.4802], "wymiary_m": [40, 60], "czas_obserwacji": null},
@@ -58,7 +58,7 @@ Wersja 2 (29.09, 15:20). Zmiany względem wersji 1:
   "stan": "zerwany",
   "przejezdny_dla": [],
   "zweryfikowany": true,
-  "pewnosc": 0.9,
+  "pewnosc": null,
   "czas_obserwacji": "2026-09-30T08:10:00+02:00",
   "zrodlo": {"typ": "dron", "lot": "lot-003", "obraz": "obrazy/lot-003/0042.jpg"},
   "symulowane": true
@@ -158,7 +158,7 @@ Pięć części: **fakty → zgłoszenia → ocena systemu → rekomendacja → 
   },
   "ocena": {
     "status": "odcieta",
-    "pewnosc": 0.9,
+    "pewnosc": null,
     "objazdy": [{"odcinki": ["odc-0107"], "dla": ["terenowy"], "zweryfikowany": false}]
   },
   "rekomendacja": {

@@ -65,11 +65,11 @@ def zapisz(ziarno=7):
         s = stany[o["id"]]
         out_o.append({**o, "stan": s,
                       "przejezdny_dla": (["osobowy", "ciezarowy", "terenowy"] if s == "przejezdny" else []),
-                      "zweryfikowany": False, "pewnosc": 0.5 if s == "przejezdny" else 0.0,
+                      "zweryfikowany": False, "pewnosc": None,
                       "czas_obserwacji": None,
                       "zrodlo": {"typ": "zalozenie", "opis": "droga utwardzona z dala od cieków"} if s == "przejezdny" else None,
                       "symulowane": False})
-    out_w = [{**w, "status": status[w["id"]], "status_pewnosc": 0.0, "status_czas": None,
+    out_w = [{**w, "status": status[w["id"]], "status_pewnosc": None, "status_czas": None,
               "dojazd": {k: False for k in siec.KLASY}, "ladowisko": None, "symulowane": False}
              for w in wsie]
     json.dump(out_o, open("stan/odcinki.json", "w"), ensure_ascii=False)

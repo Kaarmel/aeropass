@@ -88,7 +88,7 @@ def zbuduj(wies, status, trasy, przyczyny, po_id, teraz, nr):
         "priorytet": {"pilne": 1, "wazne": 2, "informacyjne": 3}[poziom],
         "fakty": {"odcinki": fakty},
         "zgloszenia": None,
-        "ocena": {"status": ciez, "status_terenowy": ter, "pewnosc": 0.9 if ciez != "nieznany" else 0.0},
+        "ocena": {"status": ciez, "status_terenowy": ter, "pewnosc": None},
         "rekomendacja": {"dzialanie": dzialanie, "srodek": srodek, "uzasadnienie": uzasadnienie},
         "wymagana_decyzja_do": (teraz + timedelta(minutes=termin)).isoformat(timespec="seconds") if termin else None,
         "tekst": tekst,
@@ -112,5 +112,6 @@ if __name__ == "__main__":
                {"ciezarowy": ["u"], "terenowy": ["u"]}, [], po_id, teraz, 3)
     assert "bez obserwacji" in m["rekomendacja"]["dzialanie"]
     assert "przed chwilą" not in m["rekomendacja"]["dzialanie"]
+    assert m["ocena"]["pewnosc"] is None
     print(m["tekst"])
     print("OK: meldunki z szablonu")

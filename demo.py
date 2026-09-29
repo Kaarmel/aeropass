@@ -128,7 +128,7 @@ class Demo:
         s = self.stany[oid] = stany_ciez[oid]
         foto = getattr(self, "_foto", None)
         self.dyn[oid] = {"stan": s, "przejezdny_dla": ["osobowy", "ciezarowy", "terenowy"] if s == "przejezdny" else [],
-                         "zweryfikowany": True, "pewnosc": 0.9, "czas_obserwacji": teraz.isoformat(timespec="seconds"),
+                         "zweryfikowany": True, "pewnosc": None, "czas_obserwacji": teraz.isoformat(timespec="seconds"),
                          "zrodlo": {"typ": "dron", "lot": self.lot["id"],
                                     "obraz": f"wyniki/{foto['plik']}" if foto else None,
                                     "model": {"stan": foto["stan"], "pewnosc": foto["pewnosc"]} if foto else None,
@@ -153,7 +153,7 @@ class Demo:
                 continue
             self.status[w] = nowy
             wies = self.wsie[w]
-            wies.update({"status": nowy["ciezarowy"], "status_pewnosc": 0.9 if nowy["ciezarowy"] != "nieznany" else 0.0,
+            wies.update({"status": nowy["ciezarowy"], "status_pewnosc": None,
                          "status_czas": teraz.isoformat(timespec="seconds"),
                          "dojazd": {"osobowy": nowy["ciezarowy"] == "dostepna", "ciezarowy": nowy["ciezarowy"] == "dostepna",
                                     "terenowy": nowy["terenowy"] == "dostepna"}, "symulowane": True})
