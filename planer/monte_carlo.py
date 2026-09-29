@@ -172,7 +172,7 @@ def na_siatke(krzywa, minuty):
 
 def main(n):
     swiat = Swiat()
-    minuty = list(range(0, 481, 5))
+    minuty = list(range(0, 721, 5))
     wyniki = {"A": [], "B": []}
     czasy = {"A": {"90": [], "100": []}, "B": {"90": [], "100": []}}
     for s in range(n):
