@@ -67,7 +67,18 @@ python demo.py --tempo 3      # terminal 2; w panelu kliknij „Zatwierdź start
 
 - `python demo.py --auto` zatwierdza start automatycznie.
 - `python planer/monte_carlo.py 40` przelicza symulację i wykresy (ok. 1 min).
-- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python test_demo_inputs.py`, `python test_monte_carlo_determinism.py`.
+- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python test_demo_inputs.py`, `python test_monte_carlo_determinism.py`, `python test_kamera.py`.
+
+### Model na kamerce (proof of concept)
+
+Model `wyniki/best.pt` jest w repo. W aktywnym środowisku Python:
+
+```bash
+pip install ultralytics
+python ai/kamera.py
+```
+
+Otwórz **http://localhost:8767/** i kliknij „Włącz kamerę”; przeglądarka poprosi o dostęp. Lokalny serwer analizuje klatkę co około 1,5 s i pokazuje maski oraz wynik. Klatki nie są zapisywane. To osobny pokaz modelu, bez zmiany stanów dróg w symulacji. Model trenowano na zdjęciach z drona w Teksasie, więc wynik z kamerki nie potwierdza przejezdności drogi.
 
 ## Jak to działa
 

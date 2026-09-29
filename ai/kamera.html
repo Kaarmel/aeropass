@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AeroPass — kamera i model</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #101923; color: #eef4f5; font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 1260px; margin: auto; padding: 28px; }
+  h1 { font-size: clamp(28px, 4vw, 44px); margin: 4px 0 6px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  .tag { color: #8ed9c4; font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+  .opis { color: #bccbd0; max-width: 780px; margin: 0 0 22px; }
+  .sterowanie { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+  button { padding: 11px 17px; border: 0; border-radius: 8px; background: #8ed9c4; color: #10211e; font: inherit; font-weight: 700; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  #stop { background: #30414b; color: #eef4f5; }
+  #komunikat { color: #bccbd0; }
+  .siatka { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .karta { min-width: 0; background: #192631; border: 1px solid #34434e; border-radius: 12px; padding: 16px; }
+  video, #obraz { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #0b1218; border-radius: 7px; display: block; }
+  #obraz { border: 1px solid #34434e; }
+  .wynik { margin: 15px 0 6px; font-size: 22px; font-weight: 750; }
+  .wynik.zalany { color: #ff8d85; } .wynik.przejezdny { color: #8ed9c4; } .wynik.nieznany { color: #f2d390; }
+  #wykrycia { color: #bccbd0; font-size: 14px; }
+  .uwaga { border-left: 3px solid #f2d390; padding-left: 12px; color: #d7dbd4; margin-top: 22px; max-width: 900px; }
+  @media (max-width: 760px) { main { padding: 18px; } .siatka { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="tag">AEROPASS / PROOF OF CONCEPT</div>
+  <h1>Model wizyjny na żywo</h1>
+  <p class="opis">Kamera pokazuje obraz na żywo. Co około 1,5 sekundy jedna klatka trafia do modelu YOLO uruchomionego lokalnie na tym komputerze. Po prawej zobaczysz maski segmentacji i wykrycia.</p>
+  <div class="sterowanie">
+    <button id="start">Włącz kamerę</button>
+    <button id="stop" disabled>Wyłącz kamerę</button>
+    <span id="komunikat" role="status">Kamera wyłączona</span>
+  </div>
+  <div class="siatka">
+    <section class="karta"><h2>Obraz z kamerki</h2><video id="wideo" autoplay muted playsinline></video></section>
+    <section class="karta"><h2>Analiza modelu</h2><img id="obraz" alt="Ostatnia klatka z maskami modelu"><div id="wynik" class="wynik nieznany">Czekam na klatkę</div><div id="wykrycia"></div></section>
+  </div>
+  <p class="uwaga">To pokaz technologii, nie ocena bezpieczeństwa drogi. Model trenowano na zdjęciach z drona w Teksasie; obraz z kamerki jest poza zakresem danych treningowych. Wynik detektora nie jest skalibrowanym prawdopodobieństwem ani potwierdzeniem przejezdności.</p>
+  <canvas id="klatka" hidden></canvas>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const nazwy = {flooded_road: "zalana droga", road_non_flooded: "niezalana droga", flooded_building: "zalany budynek"};
+const stany = {zalany: "Wykryta zalana droga", przejezdny: "Wykryta niezalana droga", nieznany: "Brak rozstrzygnięcia"};
+let strumien = null, timer = null, zajety = false;
+
+async function analizuj() {
+  if (!strumien || zajety || !$('wideo').videoWidth) return;
+  zajety = true;
+  try {
+    const wideo = $('wideo'), canvas = $('klatka');
+    canvas.width = Math.min(640, wideo.videoWidth);
+    canvas.height = Math.round(canvas.width * wideo.videoHeight / wideo.videoWidth);
+    canvas.getContext('2d').drawImage(wideo, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .8));
+    if (!blob) throw new Error('Nie udało się pobrać klatki');
+    const odp = await fetch('/api/analiza', {method: 'POST', headers: {'Content-Type': 'image/jpeg'}, body: blob});
+    const dane = await odp.json();
+    if (!odp.ok) throw new Error(dane.blad || 'Błąd analizy');
+    if (!strumien) return;
+    $('obraz').src = 'data:image/jpeg;base64,' + dane.obraz;
+    $('wynik').textContent = stany[dane.stan] || dane.stan;
+    $('wynik').className = 'wynik ' + dane.stan;
+    $('wykrycia').textContent = dane.wykrycia.length
+      ? dane.wykrycia.map(d => `${nazwy[d.name] || d.name}: ${Math.round(d.conf * 100)}% (wynik detektora)`).join(' · ')
+      : 'Model nie wykrył drogi w tej klatce.';
+    $('komunikat').textContent = 'Analiza działa lokalnie';
+  } catch (e) {
+    $('komunikat').textContent = e.message;
+  } finally {
+    zajety = false;
+  }
+}
+
+$('start').onclick = async () => {
+  $('start').disabled = true;
+  $('komunikat').textContent = 'Proszę o dostęp do kamery…';
+  try {
+    strumien = await navigator.mediaDevices.getUserMedia({video: {width: {ideal: 1280}}, audio: false});
+    $('wideo').srcObject = strumien;
+    await $('wideo').play();
+    $('stop').disabled = false;
+    $('komunikat').textContent = 'Kamera włączona';
+    timer = setInterval(analizuj, 1500);
+    analizuj();
+  } catch (e) {
+    if (strumien) strumien.getTracks().forEach(t => t.stop());
+    strumien = null;
+    $('start').disabled = false;
+    $('komunikat').textContent = 'Nie udało się włączyć kamery: ' + e.message;
+  }
+};
+
+$('stop').onclick = () => {
+  clearInterval(timer);
+  if (strumien) strumien.getTracks().forEach(t => t.stop());
+  strumien = null;
+  $('wideo').srcObject = null;
+  $('start').disabled = false;
+  $('stop').disabled = true;
+  $('komunikat').textContent = 'Kamera wyłączona';
+};
+window.addEventListener('pagehide', () => $('stop').onclick());
+</script>
+</body>
+</html>
