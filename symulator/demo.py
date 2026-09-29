@@ -19,6 +19,7 @@ Panel uruchamia to samo przyciskami (panel/serwer.py); pauza i tempo są w stan/
 import argparse
 import itertools
 import json
+import math
 import random
 import sys
 import time
@@ -75,12 +76,24 @@ class Demo:
         self.sw = mc.Swiat()
         self.prawda = sc.losuj_prawde(self.sw.odc, random.Random(ziarno))
         # ręczne zmiany z panelu (klik na odcinku); system ich nie zna, dopóki dron nie sprawdzi
-        self.prawda.update({k: v for k, v in (reczne or {}).items() if k in self.prawda and v in NIEPRZEJEZDNE | {"przejezdny"}})
+        reczne = {k: v for k, v in (reczne or {}).items() if k in self.prawda and v in NIEPRZEJEZDNE | {"przejezdny"}}
+        self.prawda.update(reczne)
         self.statyczne = {o["id"]: o for o in json.load(open(STAN / "odcinki.json", encoding="utf-8"))}
+        # droga z dala od cieków: system zakłada przejezdność, więc przeszkoda tam to zgłoszenie (np. 112),
+        # które dopisuje odcinek do zwiadu; stacje zostają tam, gdzie były
+        self.zgloszone = [k for k in reczne if not self.sw.po_id[k]["lesny"] and not sc.zagrozony(self.sw.po_id[k])]
+        for k in self.zgloszone:
+            self.sw.po_id[k]["przy_potoku"] = True  # tylko w pamięci tego przebiegu: „nie zakładaj, sprawdź”
+            self.sw.zagrozone.append(k)
+            self.sw.sektor[k] = min(range(len(self.sw.doki)), key=lambda i: siec.hav(self.sw._srodek(k), self.sw.doki[i]))
+            self.statyczne[k].update(stan="nieznany", przejezdny_dla=[], zrodlo=None, zgloszenie=True)
+        if self.zgloszone:
+            zapisz("odcinki.json", list(self.statyczne.values()))
         self.wsie = {w["id"]: w for w in json.load(open(STAN / "wsie.json", encoding="utf-8"))}
         self.stany = sc.stan_poczatkowy(self.sw.odc)  # wiedza systemu (wszystkie klasy, także leśne)
         self.dyn, self.meldunki, self.zdarzenia = {}, {}, []
         self.drony = [list(p) for _, p in self.sw.stacje][:DRONY]
+        self.kursy = [0.0] * DRONY
         self.status = {w: {"ciezarowy": "nieznany", "terenowy": "nieznany"} for w in self.wsie}
         st0 = siec.status_wsi(self.sw.G, self.sw.wz, self.stany, "ciezarowy")
         self.nieznane0, self.progi = [w for w, s in st0.items() if s == "nieznany"], {}  # do porównania strategii
@@ -114,7 +127,10 @@ class Demo:
 
     def misja(self, t_min, etap, poz=None, dron=0):
         if poz:
-            self.drony[dron] = list(poz)
+            a, b = self.drony[dron], list(poz)
+            if a != b:  # kurs w stopniach od północy, do strzałki drona w panelu
+                self.kursy[dron] = round(math.degrees(math.atan2((b[1] - a[1]) * math.cos(math.radians(a[0])), b[0] - a[0])) % 360)
+            self.drony[dron] = b
         ust = sum(s["ciezarowy"] != "nieznany" for s in self.status.values())
         znane = sum(self.status[w]["ciezarowy"] != "nieznany" for w in self.nieznane0) / max(len(self.nieznane0), 1)
         for p in (50, 90, 100):
@@ -122,7 +138,7 @@ class Demo:
                 self.progi.setdefault(str(p), round(t_min))
         km = sum(self.statyczne[o]["dlugosc_m"] for o, d in self.dyn.items()) / 1000
         zapisz("misja.json", {"czas": self.zegar(t_min).isoformat(timespec="seconds"), "minuta_lotu": round(t_min, 1),
-                              "etap": etap, "przebieg": self.przebieg, "ziarno": self.ziarno, "strategia": self.strategia, "drony": [{"polozenie": p, "stacja": self.sw.stacje[i][0]} for i, p in enumerate(self.drony)], "lot": self.lot["id"],
+                              "etap": etap, "przebieg": self.przebieg, "ziarno": self.ziarno, "strategia": self.strategia, "drony": [{"polozenie": p, "stacja": self.sw.stacje[i][0], "kurs": self.kursy[i]} for i, p in enumerate(self.drony)], "lot": self.lot["id"],
                               "stacje": [{"nazwa": n, "polozenie": list(p)} for n, p in self.sw.stacje],
                               "alarm": self.alarm, "mozna_latac": self.lot.get("mozna_latac"),
                               "postep": {"wsie_ustalone": ust, "wsie_razem": len(self.wsie), "km_sprawdzone": round(km, 1),
@@ -251,6 +267,8 @@ class Demo:
         self.alarm = alarm()
         self.zdarzenie(0, "alarm", f"SCENARIUSZ ALARMU: {self.alarm['zrodlo']} — {self.alarm['stan_cm']} cm przy progu alarmowym {self.alarm['prog_alarmowy_cm']} cm (poziom symulowany; rzeczywisty zapisany pomiar: {self.alarm['stan_rzeczywisty_cm']} cm).")
         self.lot["mozna_latac"] = mozna_latac(self.zegar(0))
+        for k in self.zgloszone:
+            self.zdarzenie(0, "zgloszenie", f"Zgłoszenie (symulowane, np. 112): przeszkoda na drodze {self.statyczne[k]['droga']} ({k}). Odcinek dopisany do zwiadu, bez założenia przejezdności.")
         self.zdarzenie(0, "pogoda", f"Ocena pogody w scenariuszu: {self.lot['mozna_latac']['poziom'].upper()} — {self.lot['mozna_latac']['powod']}. To nie jest zgoda na lot.")
         self.czekaj_na_zgode()
         krzywa, _ = mc.symuluj(self.sw, self.prawda, self.strategia, obserwuj=self.obserwuj, po_kroku=self.po_kroku, drony=DRONY)

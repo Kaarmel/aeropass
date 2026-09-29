@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 POZIOM_TEKST = {"pilne": "PILNE", "wazne": "WAŻNE", "informacyjne": "INFO"}
 NIEPRZEJEZDNE = {"zalany", "zerwany", "zablokowany"}
-OPIS_STANU = {"zalany": "zalany", "zerwany": "zerwany most", "zablokowany": "zablokowany"}
+OPIS_STANU = {"zalany": "zalany", "zerwany": "zerwany most", "zablokowany": "zablokowany (np. powalone drzewo)"}
 
 
 def _min_temu(teraz, czas_iso):

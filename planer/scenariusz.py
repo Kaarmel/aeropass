@@ -48,6 +48,19 @@ def losuj_prawde(odcinki, rng):
     return prawda
 
 
+def cieki():
+    """Rzeki i potoki z OSM w obszarze doliny (do mapy w panelu)."""
+    S, W, N, E = BBOX
+    out = []
+    for e in json.load(open(OSM, encoding="utf-8"))["elements"]:
+        typ = e.get("tags", {}).get("waterway")
+        if e["type"] == "way" and typ in ("river", "stream"):
+            g = [[round(p["lat"], 5), round(p["lon"], 5)] for p in e["geometry"]]
+            if any(S <= a <= N and W <= b <= E for a, b in g):
+                out.append({"nazwa": e["tags"].get("name"), "typ": typ, "geometria": g})
+    return out
+
+
 def stan_poczatkowy(odcinki):
     """Przed lotem: utwardzone z dala od cieków = przejezdne z założenia; reszta nieznana."""
     return {o["id"]: "przejezdny" if (not zagrozony(o) and not o["lesny"]) else "nieznany" for o in odcinki}
@@ -73,6 +86,7 @@ def zapisz(ziarno=7, plik_prawdy="symulator/scenariusz/prawda.json"):
               "dojazd": {k: False for k in siec.KLASY}, "ladowisko": None, "symulowane": False}
              for w in wsie]
     json.dump(out_o, open("stan/odcinki.json", "w"), ensure_ascii=False)
+    json.dump(cieki(), open("stan/cieki.json", "w"), ensure_ascii=False)
     json.dump(out_w, open("stan/wsie.json", "w"), ensure_ascii=False, indent=1)
     json.dump({"ziarno": ziarno, "symulowane": True,
                "zalozenia": {"P_ZERWANY_MOST": P_ZERWANY_MOST, "P_ZALANY_PRZY_POTOKU": P_ZALANY_PRZY_POTOKU,
