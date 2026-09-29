@@ -20,6 +20,7 @@ Uruchomienie z katalogu repo: python planer/monte_carlo.py [liczba_scenariuszy]
 """
 import json
 import random
+import statistics
 import sys
 from pathlib import Path
 
@@ -150,9 +151,9 @@ def symuluj(swiat, prawda, strategia, obserwuj=None, po_kroku=None, drony=1):
                     if stany.get(k) == "nieznany" and k in kandydaci:
                         licznik[k] = licznik.get(k, 0) + 1
             if licznik:
-                oid = max(licznik, key=lambda o: licznik[o] / (dolot(swiat, poz, o)[0] + swiat.po_id[o]["dlugosc_m"] + 1))
+                oid = min(licznik, key=lambda o: (-licznik[o] / (dolot(swiat, poz, o)[0] + swiat.po_id[o]["dlugosc_m"] + 1), o))
         if oid is None:  # A zawsze; B, gdy nic już nie rozstrzyga: najbliższy niesprawdzony
-            oid = min(kandydaci, key=lambda o: dolot(swiat, poz, o)[0])
+            oid = min(kandydaci, key=lambda o: (dolot(swiat, poz, o)[0], o))
         d_dolot, wyjscie = dolot(swiat, poz, oid)
         przelot = (d_dolot + swiat.po_id[oid]["dlugosc_m"]) / V
         powrot = min(siec.hav(wyjscie, dk) for dk in swiat.doki) / V
@@ -211,7 +212,7 @@ def wykres(minuty, wyniki, n, drony, plik):
         ax.fill_between(minuty, p10, p90, color=kolor, alpha=0.15, linewidth=0)
         ax.plot(minuty, sr, color=kolor, linewidth=2.2, label=etykieta)
     ax.set_xlabel(f"Minuty od startu ({drony} {'dron' if drony == 1 else 'drony'}, {len(STACJE_CACHE)} stacje dokujące, wymiany baterii wliczone)")
-    ax.set_ylabel("% wsi z ustalonym dojazdem")
+    ax.set_ylabel("% początkowo nieznanych wsi z ustalonym dojazdem")
     ax.set_ylim(0, 101)
     ax.set_xlim(0, minuty[-1])
     ax.grid(alpha=0.3)
@@ -229,8 +230,7 @@ def main(n):
     STACJE_CACHE[:] = swiat.stacje
 
     def med(xs):
-        xs = sorted(x if x is not None else float("inf") for x in xs)
-        m = xs[len(xs) // 2]
+        m = statistics.median(x if x is not None else float("inf") for x in xs)
         return None if m == float("inf") else round(m)
 
     podsum = {

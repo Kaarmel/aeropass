@@ -24,30 +24,30 @@
   "wyniki": {
     "4_drony": {
       "mediana_min_do_90proc": {
-        "A": 150,
-        "B": 91
+        "A": 133,
+        "B": 92
       },
       "mediana_min_do_100proc": {
-        "A": 158,
-        "B": 111
+        "A": 148,
+        "B": 112
       },
       "sredni_proc_wsi_ustalonych_po_60_min": {
-        "A": 68,
+        "A": 56,
         "B": 75
       },
       "wykres": "wyniki/monte_carlo.png"
     },
     "1_dron": {
       "mediana_min_do_90proc": {
-        "A": 608,
-        "B": 357
+        "A": 588,
+        "B": 351
       },
       "mediana_min_do_100proc": {
         "A": 609,
-        "B": 391
+        "B": 389
       },
       "sredni_proc_wsi_ustalonych_po_60_min": {
-        "A": 4,
+        "A": 22,
         "B": 11
       },
       "wykres": "wyniki/monte_carlo_1dron.png"

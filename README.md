@@ -3,20 +3,18 @@
 **Autonomiczny zwiad dronowy przejezdności dróg i zalania ulic dla PSP i OSP.**
 Po alarmie powodziowym drony same sprawdzają najpierw te odcinki dróg, od których zależy dojazd do wsi. Stanowisko kierowania dostaje odpowiedź: *którędy i jakim pojazdem dojedziemy do każdej miejscowości*, ze źródłem, wiekiem i pewnością informacji. Decyzję podejmuje człowiek.
 
-*(Tu wstawić GIF z demo.)*
-
 Projekt na Dual Use Hackathon 2026 (Carpathian Drone Summit, Jasionka). Scenariusz demo: **dolina Solinki i Wetlinki (Bieszczady)**.
 
 ## Wyniki
 
-**Symulacja 40 powodzi na prawdziwej sieci dróg doliny** (OSM; 359 odcinków utwardzonych przy ciekach, 119 km). 4 drony, każdy ze swojej stacji dokującej:
+**Symulacja 40 powodzi na prawdziwej sieci dróg doliny** (OSM; 359 odcinków utwardzonych przy ciekach, 119 km). Z 30 wsi 28 ma początkowo nieznany dojazd; poniższe odsetki dotyczą tych 28 wsi. 4 drony, każdy ze swojej stacji dokującej:
 
 | | AeroPass: najpierw odcinki rozstrzygające | Przegląd wszystkich dróg przy ciekach |
 |---|---|---|
-| mediana czasu do ustalenia dojazdu do **90% wsi** | **91 min** | 150 min |
-| mediana czasu do **100% wsi** | **111 min** | 158 min |
-| średnio wsi z ustalonym dojazdem **po 60 min** | **75%** | 68% |
-| (1 dron) mediana do 90% wsi | 357 min | 608 min |
+| mediana czasu do ustalenia dojazdu do **90% początkowo nieznanych wsi** | **92 min** | 133 min |
+| mediana czasu do **100% początkowo nieznanych wsi** | **112 min** | 148 min |
+| średnio z ustalonym dojazdem **po 60 min** | **75%** | 56% |
+| (1 dron) mediana do 90% początkowo nieznanych wsi | 351 min | 588 min |
 
 ![wykres](wyniki/monte_carlo.png)
 
@@ -69,7 +67,7 @@ python demo.py --tempo 3      # terminal 2; w panelu kliknij „Zatwierdź start
 
 - `python demo.py --auto` zatwierdza start automatycznie.
 - `python planer/monte_carlo.py 40` przelicza symulację i wykresy (ok. 1 min).
-- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python test_demo_inputs.py`.
+- Testy logiki (asercje): `python planer/siec.py`, `python planer/meldunek.py`, `python test_demo_inputs.py`, `python test_monte_carlo_determinism.py`.
 
 ## Jak to działa
 
