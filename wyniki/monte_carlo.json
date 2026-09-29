@@ -1,0 +1,33 @@
+{
+  "liczba_scenariuszy": 40,
+  "zalozenia": {
+    "predkosc_ms": 12.0,
+    "uzyteczne_min": 22.0,
+    "wymiana_min": 3.0,
+    "stacje": [
+      "Przysłup",
+      "Terka",
+      "Tyskowa",
+      "Wetlina"
+    ],
+    "pokrycie_km": [
+      118.3,
+      118.7
+    ],
+    "klasa_pojazdu": "ciezarowy",
+    "P_ZERWANY_MOST": 0.1,
+    "P_ZALANY_PRZY_POTOKU": 0.03,
+    "obserwacja": "bezbłędna (błąd modelu AI raportowany osobno)"
+  },
+  "odcinki_przy_ciekach": 363,
+  "km_przy_ciekach": 118.7,
+  "mediana_min_do_90proc": {
+    "A": 609,
+    "B": 370
+  },
+  "mediana_min_do_100proc": {
+    "A": 660,
+    "B": 428
+  },
+  "symulowane": true
+}

@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AeroPass — panel stanowiska kierowania</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<style>
+  :root { --tlo:#f4f5f7; --karta:#fff; --tekst:#16181d; --szary:#5b6270; --linia:#d9dce2;
+          --pilne:#c62828; --wazne:#b45309; --info:#1d4ed8; --ok:#15803d; --nie:#6b7280; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.4 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--tlo); color:var(--tekst); }
+  header { display:flex; align-items:center; gap:14px; padding:8px 14px; background:#111827; color:#fff; }
+  header h1 { font-size:16px; margin:0; font-weight:650; }
+  header .zegar { margin-left:auto; font-variant-numeric:tabular-nums; font-size:18px; }
+  .znacznik { font-size:11px; padding:2px 6px; border-radius:4px; background:#fbbf24; color:#111; font-weight:700; }
+  #pasek { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px 14px; background:var(--karta); border-bottom:1px solid var(--linia); }
+  #pasek .blok { padding:4px 8px; border-radius:6px; background:var(--tlo); }
+  #kpi { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; padding:8px 14px; }
+  .kpi { background:var(--karta); border:1px solid var(--linia); border-radius:8px; padding:6px 10px; }
+  .kpi b { display:block; font-size:24px; font-variant-numeric:tabular-nums; }
+  .kpi span { color:var(--szary); font-size:12px; }
+  main { display:grid; grid-template-columns:minmax(360px, 42%) 1fr; gap:8px; padding:0 14px 8px; height:calc(100vh - 205px); }
+  #lista { overflow:auto; }
+  #mapa { border-radius:8px; border:1px solid var(--linia); min-height:300px; }
+  .m { background:var(--karta); border:1px solid var(--linia); border-left:6px solid var(--nie); border-radius:8px; padding:8px 10px; margin-bottom:8px; cursor:pointer; }
+  .m.pilne { border-left-color:var(--pilne); } .m.wazne { border-left-color:var(--wazne); } .m.informacyjne { border-left-color:var(--info); }
+  .m.aktywny { outline:2px solid #111827; }
+  .m .gora { display:flex; gap:8px; align-items:baseline; }
+  .m .poziom { font-weight:800; font-size:12px; }
+  .pilne .poziom { color:var(--pilne); } .wazne .poziom { color:var(--wazne); } .informacyjne .poziom { color:var(--info); }
+  .m .nazwa { font-weight:700; font-size:15px; }
+  .m .wiek { margin-left:auto; color:var(--szary); font-size:12px; white-space:nowrap; }
+  .m .rek { margin:4px 0; }
+  .m .stat { color:var(--szary); font-size:12px; }
+  .przyciski { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+  button { font:inherit; padding:4px 10px; border-radius:6px; border:1px solid var(--linia); background:#fff; cursor:pointer; }
+  button.tak { background:var(--ok); color:#fff; border-color:var(--ok); }
+  button.nie { background:#fff; color:var(--pilne); border-color:var(--pilne); }
+  .decyzja { font-size:12px; margin-top:6px; padding:4px 6px; background:var(--tlo); border-radius:6px; }
+  .decyzja.brak { background:#fef3c7; }
+  #szczegoly { background:var(--karta); border:1px solid var(--linia); border-radius:8px; padding:8px 10px; margin-bottom:8px; white-space:pre-wrap; display:none; }
+  #szczegoly img { max-width:100%; border-radius:6px; margin-top:6px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--szary); margin:10px 0 6px; }
+  #nieznane span { display:inline-block; margin:0 6px 6px 0; padding:2px 8px; border-radius:12px; background:#e5e7eb; }
+  #log { font-size:12px; color:var(--szary); max-height:140px; overflow:auto; background:var(--karta); border:1px solid var(--linia); border-radius:8px; padding:6px 8px; }
+  .legenda { background:#fff; padding:6px 8px; border-radius:6px; font-size:12px; line-height:1.6; }
+  .legenda i { display:inline-block; width:22px; height:4px; margin-right:6px; vertical-align:middle; }
+  input.kto { font:inherit; padding:3px 6px; border:1px solid var(--linia); border-radius:6px; width:210px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AeroPass · stanowisko kierowania PSP · Dolina Solinki i Wetlinki</h1>
+  <span class="znacznik">DEMO · dane symulowane są oznaczone</span>
+  <span class="zegar" id="zegar">--:--</span>
+</header>
+<div id="pasek">
+  <span class="blok" id="alarm">Brak alarmu</span>
+  <span class="blok" id="pogoda">Można latać: —</span>
+  <span class="blok" id="lot">Lot: —</span>
+  <span id="zgoda"></span>
+  <span style="margin-left:auto">Decyzję podejmuje: <input class="kto" id="kto" value="dyżurny SK KP PSP (demo)"></span>
+  <button id="geojson">Eksport GeoJSON</button>
+  <button id="kml">Eksport KML</button>
+</div>
+<div id="kpi">
+  <div class="kpi"><b id="k-odc">0</b><span>⛔ wsi odciętych (wóz ciężki)</span></div>
+  <div class="kpi"><b id="k-nie">0</b><span>❓ wsi o nieustalonym dojeździe</span></div>
+  <div class="kpi"><b id="k-dost">0</b><span>✅ wsi z dojazdem</span></div>
+  <div class="kpi"><b id="k-km">0</b><span>km dróg sprawdzonych z drona</span></div>
+  <div class="kpi"><b id="k-min">0</b><span>minut lotu</span></div>
+</div>
+<main>
+  <section id="lista">
+    <div id="szczegoly"></div>
+    <h2>Meldunki według pilności</h2>
+    <div id="meldunki"></div>
+    <h2>Nie wiadomo (dron jeszcze sprawdza)</h2>
+    <div id="nieznane"></div>
+    <h2>Dziennik zdarzeń</h2>
+    <div id="log"></div>
+  </section>
+  <div id="mapa"></div>
+</main>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const pobierz = p => fetch("../" + p + "?t=" + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
+const POZIOM = {pilne: "⛔ PILNE", wazne: "⚠️ WAŻNE", informacyjne: "✅ INFO"};
+const STATUS = {dostepna: "✅ dostępna", odcieta: "⛔ odcięta", nieznany: "❓ nie wiadomo"};
+const WYNIK = {zatwierdzona: "zatwierdzona", odrzucona: "odrzucona", zmieniona: "zmieniona",
+               zadysponowano: "zadysponowano", w_drodze: "w drodze", dotarlo: "dotarło", niewykonane: "niewykonane"};
+let stan = {misja: null, wsie: [], meldunki: [], zmiany: {}, decyzje: [], loty: [], zdarzenia: []};
+let wybrany = null, odcinki = {}, warstwyOdc = {}, znacznikiWsi = {}, dron = null, stacje = [];
+
+// ---------- mapa (wektory z OSM, bez kafelków z internetu) ----------
+const mapa = L.map("mapa", {zoomSnap: 0.25, preferCanvas: true, attributionControl: true}).setView([49.21, 22.40], 11.5);
+mapa.attributionControl.addAttribution("Dane: © OpenStreetMap contributors (ODbL), IMGW-PIB");
+const legenda = L.control({position: "bottomleft"});
+legenda.onAdd = () => { const d = L.DomUtil.create("div", "legenda"); d.innerHTML =
+  '<i style="background:#15803d"></i>przejezdny (dron)<br><i style="background:#9ca3af"></i>przejezdny (założenie)<br>' +
+  '<i style="background:#6b7280;height:2px;border-top:2px dashed #6b7280"></i>nieznany<br><i style="background:#2563eb"></i>zalany<br>' +
+  '<i style="background:#dc2626"></i>zerwany / zablokowany<br><i style="background:#a16207;height:2px"></i>droga leśna'; return d; };
+legenda.addTo(mapa);
+
+function styl(o, z) {
+  const s = z ? z.stan : o.stan, lesny = o.lesny;
+  if (s === "zalany") return {color: "#2563eb", weight: 5, opacity: .95};
+  if (s === "zerwany" || s === "zablokowany") return {color: "#dc2626", weight: lesny ? 3 : 5, opacity: .95};
+  if (z && s === "przejezdny") return {color: lesny ? "#65a30d" : "#15803d", weight: lesny ? 2.5 : 4, opacity: .95};
+  if (lesny) return {color: "#a16207", weight: 1, opacity: .35, dashArray: "3 4"};
+  if (s === "nieznany") return {color: "#6b7280", weight: 3, opacity: .8, dashArray: "6 5"};
+  return {color: "#9ca3af", weight: 2.5, opacity: .8};
+}
+
+async function start() {
+  const lista = await pobierz("stan/odcinki.json") || [];
+  for (const o of lista) {
+    odcinki[o.id] = o;
+    warstwyOdc[o.id] = L.polyline(o.geometria, styl(o)).addTo(mapa)
+      .bindTooltip(() => opisOdc(o.id), {sticky: true});
+  }
+  const granice = L.latLngBounds(lista.filter(o => !o.lesny).flatMap(o => o.geometria));
+  if (granice.isValid()) mapa.fitBounds(granice, {padding: [10, 10]});
+  odswiez();
+  setInterval(odswiez, 1500);
+}
+
+function opisOdc(id) {
+  const o = odcinki[id], z = stan.zmiany[id];
+  const s = z ? z.stan : o.stan;
+  return `${o.droga} · ${id}<br>${s}${z ? " · " + wiek(z.czas_obserwacji) : o.stan === "przejezdny" ? " (założenie)" : ""}` +
+         (o.most ? "<br>most" : "") + (o.krytyczny_dla.length ? `<br>krytyczny dla: ${o.krytyczny_dla.length} wsi` : "");
+}
+
+function wiek(iso) {
+  if (!iso || !stan.misja) return "";
+  const m = Math.round((new Date(stan.misja.czas) - new Date(iso)) / 60000);
+  return m <= 0 ? "przed chwilą" : `${m} min temu`;
+}
+
+async function odswiez() {
+  const [misja, wsie, meldunki, zmiany, decyzje, loty, zdarzenia] = await Promise.all(
+    ["misja", "wsie", "meldunki", "zmiany", "decyzje", "loty", "zdarzenia"].map(n => pobierz(`stan/${n}.json`)));
+  Object.assign(stan, {misja, wsie: wsie || [], meldunki: meldunki || [], zmiany: zmiany || {},
+                       decyzje: decyzje || [], loty: loty || [], zdarzenia: zdarzenia || []});
+  rysujPasek(); rysujKpi(); rysujMape(); rysujListe(); rysujLog();
+}
+
+function rysujPasek() {
+  const m = stan.misja;
+  $("zegar").textContent = m ? new Date(m.czas).toLocaleTimeString("pl-PL", {hour: "2-digit", minute: "2-digit"}) : "--:--";
+  if (m && m.alarm) $("alarm").innerHTML = `🌊 ALARM: ${m.alarm.zrodlo}: <b>${m.alarm.stan_cm} cm</b> (próg ${m.alarm.prog_alarmowy_cm} cm; poziom symulowany)`;
+  if (m && m.mozna_latac) { const p = m.mozna_latac; const ik = {zielone: "🟢", zolte: "🟡", czerwone: "🔴"}[p.poziom];
+    $("pogoda").innerHTML = `${ik} Można latać: <b>${p.poziom.toUpperCase()}</b> · wiatr ${p.wiatr_ms} m/s, porywy ${p.porywy_ms} m/s`; }
+  const lot = stan.loty[0];
+  $("lot").innerHTML = lot ? `🚁 ${lot.id}: <b>${{propozycja: "propozycja — czeka na zgodę", w_locie: "w locie", zakonczony: "zakończony", odrzucony: "odrzucony"}[lot.status] || lot.status}</b>` +
+    (m ? ` · ${m.etap === "zwiad" ? "zwiad dróg (najpierw odcinki rozstrzygające)" : m.etap}` : "") : "Lot: —";
+  $("zgoda").innerHTML = lot && lot.status === "propozycja" && !stan.decyzje.some(d => d.dotyczy === lot.id)
+    ? `<button class="tak" onclick="decyzja('${lot.id}','decyzja','zatwierdzona')">Zatwierdź start drona</button> <button class="nie" onclick="decyzja('${lot.id}','decyzja','odrzucona')">Odrzuć</button>` : "";
+}
+
+function rysujKpi() {
+  const w = stan.wsie, p = stan.misja && stan.misja.postep;
+  $("k-odc").textContent = w.filter(x => x.status === "odcieta").length;
+  $("k-nie").textContent = w.filter(x => x.status === "nieznany").length;
+  $("k-dost").textContent = w.filter(x => x.status === "dostepna").length;
+  $("k-km").textContent = p ? p.km_sprawdzone : 0;
+  $("k-min").textContent = stan.misja ? Math.round(stan.misja.minuta_lotu) : 0;
+}
+
+function rysujMape() {
+  for (const [id, z] of Object.entries(stan.zmiany)) if (warstwyOdc[id] && !warstwyOdc[id]._z) {
+    warstwyOdc[id].setStyle(styl(odcinki[id], z)); warstwyOdc[id]._z = z.stan;
+    if (!odcinki[id].lesny || z.stan !== "przejezdny") warstwyOdc[id].bringToFront();
+  }
+  for (const w of stan.wsie) {
+    const kolor = {dostepna: "#15803d", odcieta: "#c62828", nieznany: "#6b7280"}[w.status];
+    const tekst = `${w.nazwa}: ${STATUS[w.status]}` + (w.status === "odcieta" && w.dojazd.terenowy ? " (terenowy: dojazd)" : "");
+    if (!znacznikiWsi[w.id]) znacznikiWsi[w.id] = L.circleMarker(w.polozenie, {radius: 7, weight: 2, color: "#111", fillOpacity: .95})
+      .addTo(mapa).bindTooltip("", {permanent: false}).on("click", () => { const m = stan.meldunki.find(x => x.wies === w.id); if (m) pokaz(m.id); });
+    znacznikiWsi[w.id].setStyle({fillColor: kolor}).setTooltipContent(tekst);
+  }
+  const m = stan.misja;
+  if (m && m.stacje && !stacje.length) stacje = m.stacje.map(s => L.marker(s.polozenie, {icon: L.divIcon({html: "🏠", className: "", iconSize: [18, 18]})})
+    .addTo(mapa).bindTooltip(`Stacja dokująca: ${s.nazwa} (założenie: remiza OSP)`));
+  if (m && m.dron && m.dron.polozenie) {
+    if (!dron) dron = L.marker(m.dron.polozenie, {icon: L.divIcon({html: "🚁", className: "", iconSize: [22, 22]}), zIndexOffset: 1000}).addTo(mapa).bindTooltip("Dron (symulowany przelot)");
+    dron.setLatLng(m.dron.polozenie);
+  }
+}
+
+function decyzjeDla(id) { return stan.decyzje.filter(d => d.dotyczy === id); }
+
+function rysujListe() {
+  const nazwa = Object.fromEntries(stan.wsie.map(w => [w.id, w.nazwa]));
+  $("meldunki").innerHTML = stan.meldunki.map(m => {
+    const dec = decyzjeDla(m.id).filter(d => d.typ === "decyzja").pop();
+    const pot = dec ? decyzjeDla(dec.id).pop() : null;
+    const ocena = m.ocena, termin = m.wymagana_decyzja_do ? ` · decyzja do ${new Date(m.wymagana_decyzja_do).toLocaleTimeString("pl-PL", {hour: "2-digit", minute: "2-digit"})}` : "";
+    return `<div class="m ${m.poziom} ${m.id === wybrany ? "aktywny" : ""}" onclick="pokaz('${m.id}')">
+      <div class="gora"><span class="poziom">${POZIOM[m.poziom]}</span><span class="nazwa">${nazwa[m.wies] || m.wies}</span>
+      <span class="wiek">${wiek(m.czas)}${termin}</span></div>
+      <div class="stat">wóz ciężki: ${STATUS[ocena.status]} · terenowy: ${STATUS[ocena.status_terenowy]}</div>
+      <div class="rek">${m.rekomendacja.dzialanie}</div>
+      ${dec ? `<div class="decyzja ${pot ? "" : "brak"}">Decyzja: <b>${WYNIK[dec.wynik]}</b> (${dec.kto}, ${dec.czas.slice(11, 16)})${dec.zmiana ? " · zmiana: " + dec.zmiana : ""}
+        ${pot ? ` · wykonanie: <b>${WYNIK[pot.wynik]}</b>` : ` · <b>niepotwierdzone wykonanie</b>`}</div>
+        ${pot && pot.wynik === "dotarlo" ? "" : `<div class="przyciski">${["zadysponowano", "w_drodze", "dotarlo", "niewykonane"].map(w =>
+          `<button onclick="event.stopPropagation();decyzja('${dec.id}','potwierdzenie_wykonania','${w}')">${WYNIK[w]}</button>`).join("")}</div>`}`
+        : `<div class="przyciski"><button class="tak" onclick="event.stopPropagation();decyzja('${m.id}','decyzja','zatwierdzona')">Zatwierdź</button>
+           <button onclick="event.stopPropagation();zmien('${m.id}')">Zmień</button>
+           <button class="nie" onclick="event.stopPropagation();decyzja('${m.id}','decyzja','odrzucona')">Odrzuć</button></div>`}
+    </div>`;
+  }).join("") || '<div class="stat">Brak meldunków.</div>';
+  $("nieznane").innerHTML = stan.wsie.filter(w => w.status === "nieznany").map(w => `<span>❓ ${w.nazwa}</span>`).join("") || '<span>—</span>';
+  if (wybrany) pokaz(wybrany, true);
+}
+
+function rysujLog() {
+  $("log").innerHTML = stan.zdarzenia.slice().reverse().map(z => `${z.czas.slice(11, 16)} · ${z.tekst.split("\n")[0]}`).join("<br>");
+}
+
+function pokaz(id, cicho) {
+  const m = stan.meldunki.find(x => x.id === id); if (!m) return;
+  const nowy = wybrany !== id; wybrany = id;
+  const foto = m.fakty.odcinki.map(f => f.obraz).find(Boolean);
+  $("szczegoly").style.display = "block";
+  $("szczegoly").innerHTML = `<b>${m.id}</b> · źródła: ${m.zrodla.slice(0, 8).join(", ")}${m.zrodla.length > 8 ? "…" : ""}\n\n${m.tekst}\n\nUzasadnienie: ${m.rekomendacja.uzasadnienie.join("; ")}` +
+    (foto ? `<img src="../${foto}" alt="obraz z drona (zastępczy FloodNet)"><div class="stat">Obraz zastępczy z FloodNet z predykcją modelu (demo)</div>` : "");
+  if (nowy && !cicho) {
+    const w = stan.wsie.find(x => x.id === m.wies);
+    if (w) mapa.flyTo(w.polozenie, 13, {duration: .6});
+    for (const oid of m.zrodla) if (warstwyOdc[oid]) warstwyOdc[oid].bringToFront();
+    rysujListe();
+  }
+}
+
+async function decyzja(dotyczy, typ, wynik, zmiana) {
+  await fetch("/api/decyzja", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({dotyczy, typ, wynik, zmiana: zmiana || null, kto: $("kto").value})});
+  odswiez();
+}
+
+function zmien(id) {
+  const el = document.querySelector(`.m.aktywny .przyciski`) || document.createElement("div");
+  pokaz(id);
+  setTimeout(() => {
+    const box = [...document.querySelectorAll(".m")].find(x => x.getAttribute("onclick").includes(id)).querySelector(".przyciski");
+    box.innerHTML = `<input class="kto" id="zm-${id}" placeholder="np. wysłać łódź zamiast śmigłowca" onclick="event.stopPropagation()">
+      <button class="tak" onclick="event.stopPropagation();decyzja('${id}','decyzja','zmieniona',document.getElementById('zm-${id}').value)">Zapisz zmianę</button>`;
+    document.getElementById(`zm-${id}`).focus();
+  }, 50);
+}
+
+// ---------- eksport do narzędzi GIS / systemów służb (GeoJSON: [lon, lat]) ----------
+function cechy() {
+  return Object.values(odcinki).map(o => { const z = stan.zmiany[o.id] || {};
+    return {type: "Feature", geometry: {type: "LineString", coordinates: o.geometria.map(([a, b]) => [b, a])},
+      properties: {id: o.id, droga: o.droga, stan: z.stan || o.stan, czas_obserwacji: z.czas_obserwacji || null,
+                   zrodlo: z.zrodlo ? z.zrodlo.typ : (o.zrodlo ? o.zrodlo.typ : null), most: o.most, lesny: o.lesny, symulowane: !!z.symulowane}}; })
+    .concat(stan.wsie.map(w => ({type: "Feature", geometry: {type: "Point", coordinates: [w.polozenie[1], w.polozenie[0]]},
+      properties: {id: w.id, nazwa: w.nazwa, status: w.status, dojazd: w.dojazd, status_czas: w.status_czas}})));
+}
+function zapiszPlik(nazwa, tresc, typ) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([tresc], {type: typ})); a.download = nazwa; a.click();
+}
+$("geojson").onclick = () => zapiszPlik("aeropass.geojson", JSON.stringify({type: "FeatureCollection", features: cechy()}), "application/geo+json");
+$("kml").onclick = () => {
+  const kolor = {zalany: "ffeb6325", zerwany: "ff2626dc", zablokowany: "ff2626dc", przejezdny: "ff3d8015", nieznany: "ff80756b"};
+  const pm = cechy().filter(f => f.geometry.type === "LineString" && !(f.properties.lesny && f.properties.stan === "nieznany")).map(f =>
+    `<Placemark><name>${f.properties.droga} ${f.properties.id}: ${f.properties.stan}</name><Style><LineStyle><color>${kolor[f.properties.stan]}</color><width>4</width></LineStyle></Style>` +
+    `<LineString><coordinates>${f.geometry.coordinates.map(c => c.join(",")).join(" ")}</coordinates></LineString></Placemark>`).join("");
+  zapiszPlik("aeropass.kml", `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>AeroPass</name>${pm}</Document></kml>`, "application/vnd.google-earth.kml+xml");
+};
+start();
+</script>
+</body>
+</html>
