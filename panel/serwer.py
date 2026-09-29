@@ -9,6 +9,7 @@ Uruchomienie z katalogu repo: python panel/serwer.py   →   http://localhost:87
 import importlib.util
 import json
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -225,6 +226,7 @@ class Obsluga(SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     print("Panel AeroPass: http://localhost:8765/panel/  (Ctrl+C kończy)")
     (KATALOG / "stan").mkdir(exist_ok=True)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # zamknięcie terminala też sprząta proces demo
     if not (KATALOG / "stan" / "misja.json").exists():
         uruchom_demo(56, "B", 3, {}, przygotuj=True)  # pierwszy start: pusta mapa scenariusza z prezentacji
     try:
